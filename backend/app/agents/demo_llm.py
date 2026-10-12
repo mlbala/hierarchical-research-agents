@@ -33,13 +33,18 @@ from app.schemas.agents import (
     ResearcherOutput,
     ResearchPlan,
 )
-from app.tools.demo import DEMO_BY_URL, DEMO_TOPIC
+from app.tools.demo import DEMO_BY_URL, DEMO_SOURCES, DEMO_TOPIC
 
 _QUESTION = re.compile(r"<question>\n(.*?)\n</question>", re.S)
 _SOURCE = re.compile(r'<source id="(S\d+)" url="([^"]+)"')
 _REVIEW_FINDING = re.compile(r'<finding id="(F\d+)" source="[^"]*" level="(\w+)">')
 _WRITER_FINDING = re.compile(r"^(F\d+) (\[\d+\]) \((\w+)\) (.+)$", re.M)
 _INT = r"(\d+)"
+# Position of every fixture claim, used to keep demo drafts deterministic.
+_FIXTURE_ORDER = {
+    finding.claim: index
+    for index, finding in enumerate(f for source in DEMO_SOURCES for f in source.findings)
+}
 
 DATA_QUERIES = [
     "e-bike voucher pilot evaluation results",
@@ -243,7 +248,11 @@ class DemoLLM:
         )
 
     def _draft(self, prompt: str) -> ReportDraft:
-        findings = _WRITER_FINDING.findall(prompt)
+        # Order findings by fixture order so the draft is identical no matter
+        # which researcher happened to finish first.
+        findings = sorted(
+            _WRITER_FINDING.findall(prompt), key=lambda f: _FIXTURE_ORDER.get(f[3].strip(), 999)
+        )
         revising = "Revision request" in prompt
         by_level: dict[str, list[tuple[str, str]]] = {}
         for _, marker, level, claim in findings:
@@ -252,8 +261,15 @@ class DemoLLM:
         conflicting = by_level.get("conflicting", [])
         tentative = by_level.get("tentative", [])
 
-        first = supported[0][0] if supported else (findings[0][1] if findings else "")
-        conflict_marker = conflicting[0][0] if conflicting else ""
+        def marker_for(*words: str) -> str:
+            """Cite the finding that actually states what the sentence says."""
+            for marker, claim in supported + conflicting:
+                if all(word in claim.lower() for word in words):
+                    return marker
+            return ""
+
+        first = marker_for("car trip", "61%")
+        conflict_marker = marker_for("22%")
         direct = (
             "In this fictional demo evidence set, e-bike voucher programmes shifted some short car "
             f"trips to e-bikes {first}, but results differed sharply between cities "

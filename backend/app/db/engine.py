@@ -37,9 +37,10 @@ def libpq_params(settings: Settings) -> dict[str, Any]:
         "sslmode": settings.pgsslmode,
         "connect_timeout": 10,
         "application_name": "research-hive",
-        # Guard against runaway queries; transactions are kept short anyway.
-        "options": f"-c statement_timeout={settings.db_statement_timeout_ms}",
     }
+    if settings.db_statement_timeout_ms:
+        # Guard against runaway queries; transactions are kept short anyway.
+        params["options"] = f"-c statement_timeout={settings.db_statement_timeout_ms}"
     cert = settings.sslrootcert_path
     if cert is not None:
         params["sslrootcert"] = str(cert)

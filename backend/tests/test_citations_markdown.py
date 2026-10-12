@@ -132,3 +132,34 @@ def test_inline_escaping_and_link_targets() -> None:
     assert escape_inline("Title [1](javascript:x) <b>") == "Title \\[1\\](javascript:x) \\<b\\>"
     assert markdown_link_target("javascript:alert(1)") is None
     assert markdown_link_target("https://ex.com/a b(c)") == "https://ex.com/a%20b%28c%29"
+
+
+async def test_demo_writer_cites_the_source_that_states_the_claim() -> None:
+    """Demo drafts are deterministic and cite matching sources in any order."""
+    import random
+
+    from app.agents.demo_llm import DemoLLM
+    from app.agents.llm import LLMRequest
+    from app.agents.roles import Role
+    from app.schemas.agents import ReportDraft
+
+    lines = []
+    for number, source in enumerate(DEMO_SOURCES, start=1):
+        for finding in source.findings:
+            lines.append(f"F0 [{number}] ({finding.support_level}) {finding.claim}")
+    northvale = 1 + [s.slug for s in DEMO_SOURCES].index("northvale-pilot-evaluation")
+    lakeport = 1 + [s.slug for s in DEMO_SOURCES].index("lakeport-council-memo")
+
+    drafts = []
+    for seed in range(3):
+        shuffled = lines[:]
+        random.Random(seed).shuffle(shuffled)  # noqa: S311 - test ordering, not crypto
+        prompt = "\n".join(shuffled)
+        result = await DemoLLM().generate(
+            LLMRequest(Role.TECHNICAL_WRITER, "technical_writer.draft", "", prompt, 1000),
+            ReportDraft,
+        )
+        drafts.append(result.output)
+    assert drafts[0] == drafts[1] == drafts[2]
+    assert f"e-bikes [{northvale}]" in drafts[0].direct_answer
+    assert f"between cities [{lakeport}]" in drafts[0].direct_answer

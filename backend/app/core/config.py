@@ -96,7 +96,9 @@ class Settings(BaseSettings):
     db_pool_size: int = Field(default=3, ge=1, le=20)
     db_max_overflow: int = Field(default=2, ge=0, le=20)
     db_pool_timeout_seconds: int = Field(default=10, ge=1, le=60)
-    db_statement_timeout_ms: int = Field(default=30_000, ge=1_000, le=300_000)
+    # Server-side statement timeout sent as a libpq startup option. Set 0 to
+    # disable (e.g. connection poolers that reject startup options).
+    db_statement_timeout_ms: int = Field(default=30_000, ge=0, le=300_000)
 
     # --- Providers -----------------------------------------------------------
     anthropic_api_key: SecretStr | None = None
