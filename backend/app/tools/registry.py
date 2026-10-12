@@ -87,6 +87,13 @@ class RunTools:
                 "tool.retry", run_id=str(ctx.run_id), task_id=str(task.id), tool=resource,
                 retry_attempt=attempt_no, delay_s=round(delay, 2), error_code=exc.code,
             )  # fmt: skip
+            await ctx.emit(
+                "retry",
+                f"Retrying {resource} after a transient error ({exc.code}).",
+                level="warning",
+                task_id=task.id,
+                payload={"tool": resource, "attempt": attempt_no, "error_code": exc.code},
+            )
 
         return await run_with_retries(
             attempt,

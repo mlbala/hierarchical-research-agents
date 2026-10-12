@@ -35,22 +35,28 @@ log = structlog.get_logger(__name__)
 API_PREFIX = "/api/v1"
 
 
+def build_services(settings: Settings, *, start_worker: bool) -> AppServices:
+    """Create the process-wide services (also used directly by tests)."""
+    db = Database(settings)
+    broker = EventBroker()
+    return AppServices(
+        settings=settings,
+        db=db,
+        broker=broker,
+        worker=ResearchWorker(settings, db, broker) if start_worker else None,
+        run_rate_limiter=RateLimiter(settings.run_create_rate_limit_per_minute),
+    )
+
+
 def create_app(settings: Settings | None = None, *, start_worker: bool = True) -> FastAPI:
     settings = settings or get_settings()
     configure_logging(settings.log_level)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-        db = Database(settings)
-        broker = EventBroker()
-        worker = ResearchWorker(settings, db, broker) if start_worker else None
-        app.state.services = AppServices(
-            settings=settings,
-            db=db,
-            broker=broker,
-            worker=worker,
-            run_rate_limiter=RateLimiter(settings.run_create_rate_limit_per_minute),
-        )
+        services = build_services(settings, start_worker=start_worker)
+        app.state.services = services
+        db, worker = services.db, services.worker
         for issue in configuration_issues(settings):
             log.warning("config.issue", key=issue.key, severity=issue.severity)
         log.info(

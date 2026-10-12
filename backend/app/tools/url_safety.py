@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import ipaddress
+import re
 import socket
 from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass
@@ -46,6 +47,8 @@ _BLOCKED_SUFFIXES = (
     ".home.arpa",
     ".corp",
 )
+
+_NUMERIC_LABEL = re.compile(r"(0x[0-9a-f]*|[0-9]+)")
 
 # IPv6 translation prefixes that can embed (and therefore reach) IPv4
 # destinations through a gateway. Python classifies some of these as global.
@@ -137,6 +140,10 @@ def validate_public_url(raw: str) -> ValidatedUrl:
             raise UnsafeUrlError("Hostname is not valid.") from exc
         if "." not in hostname:
             raise UnsafeUrlError("Single-label hostnames are not allowed.")
+        # A numeric last label (e.g. "127.1", "0x7f.0.0.1") is an IP address in
+        # a non-canonical spelling, never a real DNS name; refuse it outright.
+        if _NUMERIC_LABEL.fullmatch(hostname.rsplit(".", 1)[-1]):
+            raise UnsafeUrlError("Non-canonical numeric hosts are not allowed.")
         if hostname in _BLOCKED_HOSTNAMES or hostname.endswith(_BLOCKED_SUFFIXES):
             raise UnsafeUrlError(
                 "Internal hostnames are not allowed.", code="DESTINATION_NOT_PUBLIC"

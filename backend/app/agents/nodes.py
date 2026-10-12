@@ -537,6 +537,10 @@ def make_researcher_node(role: Role) -> Any:
                 "partial_reasons": [f"{ROLE_LABELS[role]} could not finish: {exc.safe_message}"],
             }
         reasons = []
+        if outcome.get("status") == "no_sources":
+            reasons.append(
+                f"{ROLE_LABELS[role]} found no usable sources in research pass {research_pass}."
+            )
         if outcome.get("limits_hit"):
             reasons.append(
                 f"{ROLE_LABELS[role]} stopped early after reaching the "
