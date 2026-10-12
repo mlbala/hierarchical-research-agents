@@ -54,7 +54,7 @@ def backoff_delay(
     """
     if retry_after is not None and retry_after >= 0:
         return min(retry_after, policy.max_retry_after)
-    exponential = policy.base_delay * (2**attempt)
+    exponential = policy.base_delay * (2.0**attempt)
     return min(policy.max_delay, exponential * (0.5 + rand()))
 
 

@@ -37,7 +37,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from sqlalchemy.sql.elements import ColumnElement
+from sqlalchemy.sql.elements import ColumnClause, ColumnElement
 
 SCHEMA = "research_hive"
 
@@ -306,9 +306,9 @@ class RunEvent(Base):
 # indexes. String constants are emitted as literals, not bind parameters.
 # ---------------------------------------------------------------------------
 
-_ENGLISH = literal_column("'english'::regconfig")
-_EMPTY = literal_column("''")
-_SPACE = literal_column("' '")
+_ENGLISH: ColumnClause[Any] = literal_column("'english'::regconfig")
+_EMPTY: ColumnClause[Any] = literal_column("''")
+_SPACE: ColumnClause[Any] = literal_column("' '")
 
 
 def source_search_vector() -> ColumnElement[Any]:
