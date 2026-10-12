@@ -41,6 +41,46 @@ numbered source. Runs, evidence and reports are saved in PostgreSQL.
 * Live mode only: an [OpenAI API key](https://platform.openai.com/api-keys)
   (or an Anthropic key) and a [Tavily API key](https://app.tavily.com/)
 
+## Technology stack
+
+* **Frontend:** React 19 and TypeScript, built with Vite. React Router handles
+  pages; TanStack Query loads and refreshes server data. Tailwind CSS 4 and
+  shadcn/ui components built on Radix provide the interface. React Markdown
+  renders the validated reports, and SSE delivers live run progress.
+* **Backend:** Python 3.12+, FastAPI and Uvicorn provide the async API and
+  serve the compiled frontend. Pydantic validates configuration, requests
+  and agent outputs; structlog produces redacted JSON logs.
+* **Agent orchestration:** LangGraph runs an explicit seven-role workflow.
+  OpenAI or Anthropic generates structured outputs, Tavily searches the web,
+  and HTTPX with BeautifulSoup/lxml retrieves and extracts source text.
+* **Persistence:** PostgreSQL stores projects, runs, tasks, evidence, reports
+  and events. SQLAlchemy uses Psycopg 3 for connections; Alembic manages
+  schema migrations. The database also supplies the durable queue and worker
+  lock, so Redis and Celery are not needed.
+* **Development checks:** uv manages Python dependencies; npm manages the
+  frontend. Ruff, mypy and pytest check the backend; TypeScript, oxlint,
+  Vitest and Playwright check the frontend.
+
+## From question to report
+
+1. Create a project, enter a question and optional context/reference URLs,
+   and choose Quick or Standard depth.
+2. The API saves a queued run in PostgreSQL. The background worker claims
+   it and starts the LangGraph workflow.
+3. The director plans the research. The research lead assigns complementary
+   tasks to the data and market researchers, which work in parallel.
+4. Researchers collect sources and verified excerpts. Their lead reviews
+   the findings and can request a bounded extra research pass.
+5. The writing lead outlines the report from approved evidence. The technical
+   writer drafts it, the lead reviews it, and the summary writer summarizes
+   the resulting report.
+6. Code validates and renumbers citations; the director adds a handoff note.
+   The backend saves the report and its source links. The UI receives progress
+   events throughout and lets you inspect evidence or download Markdown.
+
+See [Architecture](docs/architecture.md) for the exact graph, backend layers
+and how the agents exchange structured results.
+
 ## Quick start (demo mode)
 
 ```bash
@@ -65,6 +105,34 @@ uv run python -m app            # open http://127.0.0.1:8000
 
 Create a project, ask a question (the demo fixtures are about e-bike subsidy
 programmes) and watch the agents work. Demo reports are labelled as fictional.
+
+Demo mode still requires PostgreSQL: it replaces LLM/search/page-fetch calls
+with fixtures, while persistence and the worker run normally.
+
+### Database setup and connection checks
+
+Set `PGDATABASE` to the exact name of an existing database, and `DB_SCHEMA`
+to the namespace for this application's tables (default `research_hive`).
+The database and schema are different objects: successfully connecting or
+running `SELECT VERSION()` does not create the application tables.
+
+```bash
+# From the repository root, after uv sync in backend/
+backend/.venv/bin/python scripts/bootstrap_db.py --check  # read-only status
+backend/.venv/bin/python scripts/bootstrap_db.py          # create schema + migrate
+```
+
+`--check` exits with status 1 when migrations are missing or behind; it does
+not initialize them. If it reports `Connected` followed by `Schema ... missing`,
+connectivity works: run the command without `--check`. The bootstrap script
+creates the configured schema and applies migrations, but never creates the
+database or database roles. Its user must have permission to create the schema.
+
+This project reads `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD`,
+`PGSSLMODE` and `PGSSLROOTCERT`. Older applications' `DB_HOST`, `DB_NAME`,
+`DB_USER`, `DB_PASSWORD` and `DATABASE_URL` settings are not supported aliases.
+Relative CA paths are resolved from the repository root. Restart the backend
+after changing `.env`. See [Aiven setup](docs/aiven.md) for remote TLS setup.
 
 ## Live mode
 
@@ -113,6 +181,17 @@ Run the backend and the Vite dev server side by side; Vite proxies `/api`
 cd backend  && uv run python -m app --reload   # http://127.0.0.1:8000
 cd frontend && npm run dev                      # http://localhost:5173
 ```
+
+Run these in separate terminals after installing dependencies and applying
+the database migrations. For a single-server setup, build the frontend and
+run only the backend as shown in Quick start. Check readiness with:
+
+```bash
+curl http://127.0.0.1:8000/api/v1/health/ready
+```
+
+Readiness checks database access, migrations, provider configuration and worker
+state without making paid provider calls.
 
 Checks and tests (details in [docs/testing.md](docs/testing.md)):
 
