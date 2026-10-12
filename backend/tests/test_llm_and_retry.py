@@ -10,7 +10,7 @@ import anthropic
 import httpx
 import httpx2
 import pytest
-from pydantic import SecretStr
+from pydantic import SecretStr, ValidationError
 
 from app.agents.llm import (
     AnthropicLLM,
@@ -23,11 +23,21 @@ from app.agents.llm import (
 from app.agents.roles import Role
 from app.core.errors import AppError, ConfigurationError, ProviderError
 from app.core.retry import Deadline, RetryPolicy, backoff_delay, run_with_retries
-from app.schemas.agents import DirectorHandoff, ResearcherOutput
+from app.schemas.agents import DirectorHandoff, EvidenceReview, ResearcherOutput
 from app.tools.search import TavilySearch, parse_tavily_results
 from tests.conftest import make_settings
 
 USAGE = LLMUsage(input_tokens=10, output_tokens=5)
+
+
+def test_review_accepts_substantive_notes_but_rejects_unbounded_text() -> None:
+    review = {"contradictions": ["x" * 1200], "summary": "s" * 2400, "decision": "sufficient"}
+    output = EvidenceReview.model_validate(review)
+    assert len(output.contradictions[0]) == 1200
+    with pytest.raises(ValidationError):
+        EvidenceReview.model_validate({**review, "contradictions": ["x" * 1201]})
+    with pytest.raises(ValidationError):
+        EvidenceReview.model_validate({**review, "summary": "s" * 2401})
 
 
 # --- Structured output validation ----------------------------------------------

@@ -15,10 +15,12 @@ dependencies = [
     "httpx>=0.28.1,<1",
     "langgraph>=1.2.14,<2",
     "lxml>=6.1,<7",
+    "markdown-it-py>=4,<5",
     "openai>=3.29,<4",
     "psycopg[binary]>=3.3.6,<4",
     "pydantic>=2.14,<3",
     "pydantic-settings>=2.15,<3",
+    "reportlab>=4.4,<5",
     "sqlalchemy[asyncio]>=2.1.4,<2.2",
     "structlog>=26.1,<27",
     "uvicorn[standard]>=0.54,<1",
@@ -27,6 +29,7 @@ dependencies = [
 [dependency-groups]
 dev = [
     "mypy>=2.4,<3",
+    "pypdf>=6,<7",
     "pytest>=9.1,<10",
     "pytest-asyncio>=1.4,<2",
     "ruff>=0.17,<0.18",
@@ -61,6 +64,10 @@ python_version = "3.12"
 strict = true
 plugins = ["pydantic.mypy"]
 exclude = ["migrations/versions/"]
+
+[[tool.mypy.overrides]]
+module = ["reportlab.*"]
+ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = ["tests.*"]

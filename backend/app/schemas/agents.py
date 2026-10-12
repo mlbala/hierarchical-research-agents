@@ -18,7 +18,8 @@ ResearcherRole = Literal["data_researcher", "market_researcher"]
 SourceRef = Annotated[str, Field(pattern=r"^S\d{1,3}$", description="Source handle such as S3")]
 FindingRef = Annotated[str, Field(pattern=r"^F\d{1,3}$", description="Finding handle such as F7")]
 Query = Annotated[str, Field(min_length=3, max_length=200)]
-ShortText = Annotated[str, Field(max_length=300)]
+# Allow substantive caveats/contradictions while keeping prompt growth bounded.
+ShortText = Annotated[str, Field(max_length=1200)]
 
 
 class AgentOutput(BaseModel):
@@ -74,7 +75,7 @@ class AssignmentSet(AgentOutput):
 class FindingAssessment(AgentOutput):
     finding_ref: FindingRef
     verdict: Literal["supported", "weak", "unsupported", "conflicting"]
-    note: str = Field(default="", max_length=300)
+    note: str = Field(default="", max_length=1200)
 
 
 class FollowUp(AgentOutput):
@@ -92,7 +93,7 @@ class EvidenceReview(AgentOutput):
     uncovered_sub_questions: list[ShortText] = Field(default_factory=list, max_length=5)
     decision: Literal["sufficient", "needs_more_research", "insufficient_evidence"]
     follow_ups: list[FollowUp] = Field(default_factory=list, max_length=2)
-    summary: str = Field(max_length=800)
+    summary: str = Field(max_length=2400)
 
 
 # --- Researchers ---------------------------------------------------------------

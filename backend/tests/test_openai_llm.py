@@ -6,6 +6,7 @@ Uses an in-process fake client; no request reaches OpenAI.
 from __future__ import annotations
 
 import json
+import re
 from types import SimpleNamespace
 from typing import Any
 
@@ -56,15 +57,37 @@ def test_every_agent_schema_meets_openai_strict_rules(model: type[BaseModel]) ->
             assert set(node) == {"$ref"}  # no sibling keywords next to a $ref
 
 
-def test_length_limits_move_into_descriptions_and_optionals_become_nullable() -> None:
+def test_length_limits_are_constrained_and_optionals_become_nullable() -> None:
     schema = strict_json_schema(ResearchPlan)
     objective = schema["properties"]["objective"]
     assert "maxLength: 600" in objective["description"]
+    assert re.fullmatch(objective["pattern"], "x" * 600)
+    assert not re.fullmatch(objective["pattern"], "x" * 601)
     context = schema["properties"]["context_focus"]
     assert {"type": "null"} in context["anyOf"]
     assert "context_focus" in schema["required"]  # optional value, required key
     # Property names that collide with dropped keywords are kept.
     assert "title" in strict_json_schema(agent_schemas.ReportOutline)["properties"]
+
+
+def test_review_contradiction_limits_apply_to_each_item() -> None:
+    schema = strict_json_schema(agent_schemas.EvidenceReview)
+    pattern = schema["properties"]["contradictions"]["items"]["pattern"]
+    assert re.fullmatch(pattern, "é" * 1200)
+    assert re.fullmatch(pattern, "line one\nline two")
+    assert not re.fullmatch(pattern, "x" * 1201)
+    assert schema["properties"]["contradictions"]["maxItems"] == 6
+
+
+def test_length_patterns_preserve_minimums_and_source_handle_rules() -> None:
+    schema = strict_json_schema(agent_schemas.ResearchAssignment)
+    query = schema["properties"]["search_queries"]["items"]
+    assert not re.fullmatch(query["pattern"], "ab")
+    assert re.fullmatch(query["pattern"], "abc")
+    assert not re.fullmatch(query["pattern"], "x" * 201)
+    researcher = strict_json_schema(agent_schemas.ResearcherOutput)
+    source_ref = researcher["$defs"]["ExtractedFinding"]["properties"]["source_ref"]
+    assert source_ref["pattern"] == r"^S\d{1,3}$"
 
 
 def live_settings(**overrides: Any) -> Any:

@@ -22,6 +22,13 @@ numbered source. Runs, evidence and reports are saved in PostgreSQL.
 * **Demo mode**: runs completely offline on clearly fictional fixtures, with no
   API keys and no external calls.
 
+Saved reports also offer **Download PDF**: a paginated A4 document with the
+summary, findings, analysis, limitations and clickable source references.
+PDF export uses ReportLab and the saved report content, retains demo/partial
+notices, and makes no additional model or web calls. Markdown download and
+copy remain available. After updating the project, run `uv sync` in `backend/`
+and rebuild the frontend with `npm run build` to enable the new option.
+
 > **Costs.** The application is open source, but the services it uses are
 > not free: OpenAI (or Anthropic) API calls are billed per token, Tavily
 > searches are billed per request beyond the free monthly credits, and managed
@@ -173,6 +180,33 @@ with `LLM_QUOTA_EXCEEDED` when the provider account runs out of credit.
 Without both price settings the estimated cost is shown as "unknown".
 
 ## Development
+
+### Installing with pip
+
+Python 3.12+ users can install the locked backend dependencies without uv:
+
+```bash
+cd backend
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --require-hashes -r requirements.txt
+# For lint, type checks and tests, install requirements-dev.txt instead:
+# python -m pip install --require-hashes -r requirements-dev.txt
+python ../scripts/bootstrap_db.py
+python -m app
+```
+
+Both files include pinned transitive dependencies and package hashes;
+`requirements-dev.txt` includes runtime dependencies plus development tools.
+`pyproject.toml` and `uv.lock` remain the source of truth. Regenerate the files
+after dependency changes, from `backend/`:
+
+```bash
+uv export --frozen --no-dev --no-emit-project --output-file requirements.txt
+uv export --frozen --no-emit-project --output-file requirements-dev.txt
+```
+
+Frontend dependencies still use `npm ci` in `frontend/`.
 
 Run the backend and the Vite dev server side by side; Vite proxies `/api`
 (including SSE) to the backend:
