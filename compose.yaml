@@ -1,0 +1,15 @@
+services:
+  app:
+    build: .
+    image: research-hive:local
+    env_file:
+      - .env
+    environment:
+      HOST: 0.0.0.0
+      PORT: "8000"
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - ./certs:/app/certs:ro
+    init: true
+    restart: unless-stopped

@@ -189,24 +189,75 @@ Python 3.12+ users can install the locked backend dependencies without uv:
 cd backend
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install --require-hashes -r requirements.txt
+python -m pip install -r ../requirements.txt
 # For lint, type checks and tests, install requirements-dev.txt instead:
-# python -m pip install --require-hashes -r requirements-dev.txt
+# python -m pip install -r ../requirements-dev.txt
 python ../scripts/bootstrap_db.py
 python -m app
 ```
 
-Both files include pinned transitive dependencies and package hashes;
+Both files live at the repository root and include pinned transitive dependencies without hashes;
 `requirements-dev.txt` includes runtime dependencies plus development tools.
 `pyproject.toml` and `uv.lock` remain the source of truth. Regenerate the files
 after dependency changes, from `backend/`:
 
 ```bash
-uv export --frozen --no-dev --no-emit-project --output-file requirements.txt
-uv export --frozen --no-emit-project --output-file requirements-dev.txt
+uv export --frozen --no-dev --no-emit-project --no-hashes --output-file ../requirements.txt
+uv export --frozen --no-emit-project --no-hashes --output-file ../requirements-dev.txt
 ```
 
 Frontend dependencies still use `npm ci` in `frontend/`.
+
+### Running with Docker
+
+The root `Dockerfile` builds the React frontend in a Node stage, then packages
+its build with the Python backend in a non-root runtime image. Docker Compose
+uses your existing remote PostgreSQL database; it does not create a database
+service. Follow [Docker's multi-stage build guide](https://docs.docker.com/build/building/multi-stage/)
+for background on this layout.
+
+Configure `.env` with the PG* connection values and provider keys, and save
+the CA as `certs/aiven-ca.pem`. Use `PGSSLROOTCERT=./certs/aiven-ca.pem` so the
+read-only certificate mount resolves inside the container. Absolute paths from
+your host machine do not work inside the container. Ensure the certificate is
+readable by the container's user (UID 10001); the CA certificate is public.
+The database host must be reachable from Docker; `localhost` refers to the
+container itself. For PostgreSQL on a Docker Desktop host, use
+`host.docker.internal` with TLS settings appropriate for that database.
+
+From the repository root:
+
+```bash
+docker compose build
+docker compose run --rm app python ../scripts/bootstrap_db.py
+docker compose up -d
+# Open http://127.0.0.1:8000
+docker compose logs -f app
+```
+
+The bootstrap step creates the configured schema and applies migrations; run it
+before the first start and after migration changes. It is safe to rerun against
+an initialized database. No migrations are run automatically on server start.
+For status without changes, add `--check` to the bootstrap command.
+
+Compose injects `.env` at runtime and mounts `certs/` read-only; neither is
+baked into the image. It overrides `HOST=0.0.0.0` inside the container and
+publishes port 8000 only on the host's loopback interface. The healthcheck tests
+process liveness; `/api/v1/health/ready` additionally checks database readiness.
+Keep one app instance; the existing PostgreSQL advisory lock governs execution.
+
+```bash
+docker compose up -d --build  # rebuild after code changes
+docker compose down          # stop containers; remote database data is retained
+```
+
+To use the Dockerfile directly:
+
+```bash
+docker build -t research-hive:local .
+docker run --rm --env-file .env -v "$(pwd)/certs:/app/certs:ro" research-hive:local python ../scripts/bootstrap_db.py
+docker run --rm --init --env-file .env -e HOST=0.0.0.0 -e PORT=8000 -p 127.0.0.1:8000:8000 -v "$(pwd)/certs:/app/certs:ro" research-hive:local
+```
 
 Run the backend and the Vite dev server side by side; Vite proxies `/api`
 (including SSE) to the backend:
