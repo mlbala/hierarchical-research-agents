@@ -1,7 +1,9 @@
 """Small server-side LLM adapter.
 
-The rest of the application depends only on ``LLMClient``; ``AnthropicLLM`` is
-the live implementation and ``DemoLLM`` (agents/demo_llm.py) the offline one.
+The rest of the application depends only on ``LLMClient``. Live
+implementations: ``OpenAILLM`` (agents/openai_llm.py, the default provider)
+and ``AnthropicLLM`` (below); ``DemoLLM`` (agents/demo_llm.py) is the offline
+one. ``LLM_PROVIDER`` selects the live adapter.
 
 Design notes:
 

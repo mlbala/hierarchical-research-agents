@@ -1,7 +1,7 @@
 # Testing
 
 No test calls a paid API or uses real research records. Demo providers and
-in-process fakes stand in for Anthropic, Tavily and the network.
+in-process fakes stand in for OpenAI, Anthropic, Tavily and the network.
 
 ## Test database
 
@@ -59,7 +59,8 @@ first (or use `scripts/check.sh`, which does).
 | Hierarchy, tool permissions, exact graph edges, routing functions | `test_hierarchy_routing.py` |
 | Review-loop limits, shared budgets, budget-bounded runs | `test_worker.py`, `test_redaction_budget.py` |
 | Malformed structured output, refusal/truncation, corrective retry | `test_llm_and_retry.py`, `test_worker.py` |
-| Provider error classification, Retry-After, deadline-aware backoff | `test_llm_and_retry.py` |
+| Provider error classification, Retry-After, deadline-aware backoff | `test_llm_and_retry.py`, `test_openai_llm.py` |
+| OpenAI strict schemas, request shape, refusals, out-of-credit handling | `test_openai_llm.py`, `test_worker.py` |
 | URL blocking, IPv6/mapped/NAT64, DNS rebinding, redirects, size/type limits, decompression bombs | `test_url_safety.py` |
 | Cross-run citation rejection (service + composite FKs), renumbering, excerpt verification | `test_sse_persistence.py`, `test_citations_markdown.py` |
 | Markdown/XSS protection | `test_citations_markdown.py`, `frontend/src/test/markdown.test.tsx` |
@@ -72,7 +73,7 @@ first (or use `scripts/check.sh`, which does).
 
 ## Not covered by automated tests
 
-* Live calls to Anthropic and Tavily (would spend money). The adapters are
-  tested with fakes that mirror the SDK/REST shapes, and the request
-  parameters were checked against the installed SDK's signature.
+* Live calls to OpenAI, Anthropic and Tavily (would spend money). The adapters
+  are tested with fakes that mirror the SDK/REST shapes, and the request
+  parameters are type-checked against the installed SDKs.
 * A live Aiven connection (no credentials during development).

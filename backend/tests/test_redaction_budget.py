@@ -74,6 +74,7 @@ def test_structured_logs_never_contain_secrets(capsys: pytest.CaptureFixture[str
 
 def test_settings_never_expose_secrets() -> None:
     settings = make_settings(
+        openai_api_key=SecretStr("sk-proj-SECRETSECRETSECRET"),
         anthropic_api_key=SecretStr("sk-ant-api03-SECRETSECRETSECRET"),
         tavily_api_key=SecretStr("tvly-dev-SECRETSECRETSECRET"),
         pgpassword=SecretStr("hunter2"),

@@ -118,6 +118,12 @@ export function ResearchForm({ projectId }: { projectId: string }) {
         </div>
         <CardDescription>
           Seven agents plan, research, review and write a cited report. Progress appears live.
+          {config.data?.execution_mode === 'live' && config.data.llm_model && (
+            <span className="mt-1 block text-xs">
+              Model: <code>{config.data.llm_model}</code> ({config.data.llm_provider}) · web
+              search: {config.data.search_provider}
+            </span>
+          )}
         </CardDescription>
       </CardHeader>
       <CardContent>

@@ -85,6 +85,8 @@ not user authentication.**
 
 ## Secrets
 
+* OpenAI requests are sent with `store=False`, so responses are not kept for
+  later retrieval through OpenAI's API.
 * Database credentials and API keys are read only by the backend
   (`SecretStr`); there are no `VITE_*` secrets and nothing secret reaches the
   browser, URLs, reports, prompts, SSE payloads or logs.

@@ -65,6 +65,10 @@ def make_settings(**overrides: Any) -> Settings:
         "pgpassword": SecretStr(os.environ.get("TEST_PGPASSWORD", "")),
         "pgsslmode": os.environ.get("TEST_PGSSLMODE", "disable"),
         "pgsslrootcert": os.environ.get("TEST_PGSSLROOTCERT") or None,
+        # Never pick up provider keys from the developer's shell.
+        "llm_provider": "openai",
+        "openai_api_key": None,
+        "openai_model": None,
         "anthropic_api_key": None,
         "tavily_api_key": None,
         "anthropic_model": None,

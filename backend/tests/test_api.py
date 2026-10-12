@@ -167,10 +167,17 @@ async def test_live_mode_without_keys_fails_clearly(client: httpx.AsyncClient) -
     assert response.status_code == 503
     error = response.json()["error"]
     assert error["code"] == "CONFIGURATION_ERROR"
-    assert "ANTHROPIC_API_KEY" in error["message"] and "TAVILY_API_KEY" in error["message"]
+    for key in ("OPENAI_API_KEY", "OPENAI_MODEL", "TAVILY_API_KEY"):
+        assert key in error["message"]
     config = (await client.get("/api/v1/config")).json()
     assert config["execution_mode"] == "live" and config["live_ready"] is False
-    assert {i["key"] for i in config["issues"]} >= {"ANTHROPIC_API_KEY", "TAVILY_API_KEY"}
+    assert config["llm_provider"] == "openai"
+    assert {i["key"] for i in config["issues"]} >= {"OPENAI_API_KEY", "TAVILY_API_KEY"}
+
+    # The Anthropic provider asks for its own keys instead.
+    services.settings = services.settings.model_copy(update={"llm_provider": "anthropic"})
+    other = await post_run(client, project["id"], QUESTION, "live-key-0002")
+    assert "ANTHROPIC_API_KEY" in other.json()["error"]["message"]
 
 
 @pytest.mark.parametrize(

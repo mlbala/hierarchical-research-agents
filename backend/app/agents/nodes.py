@@ -58,7 +58,13 @@ WRITING_LLM_CALLS = 5
 MAX_WRITER_FINDINGS = 40
 # Provider failures that would fail every later step too: stop the run.
 FATAL_PROVIDER_CODES = frozenset(
-    {"LLM_AUTH_FAILED", "LLM_MODEL_NOT_FOUND", "SEARCH_AUTH_FAILED", "SEARCH_QUOTA_EXCEEDED"}
+    {
+        "LLM_AUTH_FAILED",
+        "LLM_MODEL_NOT_FOUND",
+        "LLM_QUOTA_EXCEEDED",
+        "SEARCH_AUTH_FAILED",
+        "SEARCH_QUOTA_EXCEEDED",
+    }
 )
 _PRIMARY_HOST = re.compile(r"(\.gov|\.gov\.[a-z]{2}|\.edu|\.int|\.ac\.[a-z]{2}|europa\.eu)$")
 

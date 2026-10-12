@@ -22,7 +22,8 @@ research runs with LangGraph. PostgreSQL holds all state.
          ▼
        LangGraph StateGraph  ──► RunContext (budgets, deadline, cancellation,
          │                         retries, task bookkeeping, events)
-         ├── LLM adapter ─────────► Anthropic Messages API (live) | DemoLLM
+         ├── LLM adapter ─────────► OpenAI Responses API (default) or
+         │                          Anthropic Messages API (live)  | DemoLLM
          ├── web_search ──────────► Tavily REST API (live)       | DemoSearch
          ├── fetch_page ──────────► SSRF-safe fetcher (live)     | DemoPageFetcher
          └── run_evidence ────────► PostgreSQL (run-scoped)
@@ -41,6 +42,10 @@ Why this shape:
   a PostgreSQL session advisory lock on a dedicated connection. Extra
   processes stay in standby. Runs are claimed with an atomic
   `UPDATE … WHERE id = (SELECT … FOR UPDATE SKIP LOCKED)`.
+* **Provider-neutral agents.** Every agent talks to one small `LLMClient`
+  interface. `LLM_PROVIDER` selects the OpenAI adapter (Responses API with
+  strict Structured Outputs, the default) or the Anthropic adapter; budgets,
+  retries, validation and routing are identical for both.
 * **Short transactions.** Every database write opens and commits its own
   short transaction. No transaction is held across an LLM or network call.
 
@@ -151,7 +156,7 @@ backend/app/
   core/              settings, errors + envelope, logging/redaction, retry,
                      security middleware, Markdown hardening
   db/                engine/sessions (structured params, TLS), ORM models
-  agents/            roles, prompts, LLM adapter, demo LLM, run context,
+  agents/            roles, prompts, LLM adapters (OpenAI, Anthropic), demo LLM, run context,
                      graph nodes, graph definition
   tools/             URL safety, fetcher, extraction, Tavily, demo fixtures,
                      tool registry (permissions)

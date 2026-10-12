@@ -34,6 +34,7 @@ from app.agents.context import RunContext
 from app.agents.demo_llm import DemoLLM
 from app.agents.graph import RECURSION_LIMIT, build_graph, initial_state
 from app.agents.llm import AnthropicLLM, LLMClient
+from app.agents.openai_llm import OpenAILLM
 from app.core.config import Settings
 from app.core.errors import AppError, ResearchTimeoutError, RunCancelledError
 from app.core.logging import redact_text
@@ -58,7 +59,9 @@ def default_providers(settings: Settings, execution_mode: str) -> Providers:
     """Demo mode never touches the network; live mode requires full config."""
     if execution_mode == "demo":
         return DemoLLM(settings.demo_step_delay_ms), DemoSearch(), DemoPageFetcher()
-    llm = AnthropicLLM(settings)
+    llm: LLMClient = (
+        OpenAILLM(settings) if settings.llm_provider == "openai" else AnthropicLLM(settings)
+    )
     search = TavilySearch(settings.tavily_api_key, timeout_seconds=settings.search_timeout_seconds)
     fetcher = SafePageFetcher(
         timeout_seconds=settings.fetch_timeout_seconds,

@@ -23,9 +23,10 @@ numbered source. Runs, evidence and reports are saved in PostgreSQL.
   API keys and no external calls.
 
 > **Costs.** The application is open source, but the services it uses are
-> not free: Anthropic API calls are billed per token, Tavily searches are
-> billed per request, and managed PostgreSQL (e.g. Aiven) or hosting is billed
-> by its provider. Demo mode makes no paid calls.
+> not free: OpenAI (or Anthropic) API calls are billed per token, Tavily
+> searches are billed per request beyond the free monthly credits, and managed
+> PostgreSQL (e.g. Aiven) or hosting is billed by its provider. Demo mode makes
+> no paid calls.
 
 > **Access.** There is no login. Everyone who can reach the server shares one
 > workspace. It binds to `127.0.0.1` by default; read
@@ -37,8 +38,8 @@ numbered source. Runs, evidence and reports are saved in PostgreSQL.
 * Node.js 20.19+ (22 LTS recommended) and npm
 * PostgreSQL 14+ (Aiven or local) — the app needs one database it can create a
   schema in
-* Live mode only: an [Anthropic API key](https://console.anthropic.com/) and a
-  [Tavily API key](https://app.tavily.com/)
+* Live mode only: an [OpenAI API key](https://platform.openai.com/api-keys)
+  (or an Anthropic key) and a [Tavily API key](https://app.tavily.com/)
 
 ## Quick start (demo mode)
 
@@ -67,22 +68,33 @@ programmes) and watch the agents work. Demo reports are labelled as fictional.
 
 ## Live mode
 
-Set in `.env`:
+OpenAI is the default provider. Set in `.env`:
 
 ```ini
 DEMO_MODE=false
-ANTHROPIC_API_KEY=sk-ant-...
-ANTHROPIC_MODEL=claude-opus-5-5    # verified current model ID; claude-sonnet-5-5 is cheaper
+LLM_PROVIDER=openai
+OPENAI_API_KEY=sk-...
+OPENAI_MODEL=gpt-6-luna            # OpenAI's most efficient current model
+OPENAI_REASONING_EFFORT=low        # none|low|medium|high|xhigh|max; lower = cheaper
 TAVILY_API_KEY=tvly-...
+LLM_INPUT_USD_PER_MTOK=0.10        # gpt-6-luna prices, for the cost estimate
+LLM_OUTPUT_USD_PER_MTOK=0.50
 ```
 
-The model is configurable. Live mode fails clearly (UI warning, `503
-CONFIGURATION_ERROR` on run creation, readiness check) when a key or the model
-is missing. Optional: `ANTHROPIC_EFFORT` (`low`…`max`), and
-`LLM_INPUT_USD_PER_MTOK` / `LLM_OUTPUT_USD_PER_MTOK` to show estimated LLM cost
-(otherwise shown as "unknown"). For supported models the adapter opts into
-Anthropic's server-side refusal fallback (`ANTHROPIC_REFUSAL_FALLBACK=false`
-to disable).
+`gpt-6-luna` is listed at $0.10 input / $0.50 output per million tokens on
+OpenAI's pricing page (checked 2026-10-12); a Standard run uses roughly 65k
+input and 15–40k output tokens, i.e. about one to three cents. For better
+writing at higher cost use `gpt-6.1-sol` (and update the two prices).
+
+Anthropic remains supported: set `LLM_PROVIDER=anthropic`,
+`ANTHROPIC_API_KEY` and `ANTHROPIC_MODEL` (e.g. `claude-haiku-5-5` for low cost
+or `claude-opus-5-5` for the highest quality); `ANTHROPIC_EFFORT` and
+`ANTHROPIC_REFUSAL_FALLBACK` are optional.
+
+Live mode fails clearly (UI warning, `503 CONFIGURATION_ERROR` on run
+creation, readiness check) when a key or the model is missing, and a run stops
+with `LLM_QUOTA_EXCEEDED` when the provider account runs out of credit.
+Without both price settings the estimated cost is shown as "unknown".
 
 ## Development
 
@@ -116,7 +128,10 @@ The essentials:
 | `PGHOST` … `PGSSLROOTCERT` | — | PostgreSQL connection (structured parameters, `verify-full` TLS) |
 | `DB_SCHEMA` | `research_hive` | all tables live in this schema |
 | `DB_POOL_SIZE`, `DB_MAX_OVERFLOW` | `3`, `2` | small pool for a small managed database |
-| `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`, `TAVILY_API_KEY` | — | live providers |
+| `LLM_PROVIDER` | `openai` | `openai` or `anthropic` |
+| `OPENAI_API_KEY`, `OPENAI_MODEL`, `OPENAI_REASONING_EFFORT` | —, `gpt-6-luna` in template, `low` | OpenAI live provider |
+| `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` | — | Anthropic live provider |
+| `TAVILY_API_KEY` | — | live web search |
 | `MAX_*`, `RUN_TIMEOUT_SECONDS` | see [operations](docs/operations.md) | per-run budgets and limits |
 
 ## Documentation

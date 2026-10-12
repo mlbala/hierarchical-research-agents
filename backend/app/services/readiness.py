@@ -24,16 +24,30 @@ class ConfigIssue:
 def configuration_issues(settings: Settings) -> list[ConfigIssue]:
     issues: list[ConfigIssue] = []
     if not settings.demo_mode:
-        if settings.anthropic_api_key is None:
-            issues.append(ConfigIssue("ANTHROPIC_API_KEY", "error", "Required for live research."))
-        if not settings.anthropic_model:
-            issues.append(
-                ConfigIssue(
-                    "ANTHROPIC_MODEL",
-                    "error",
-                    "Required for live research (for example claude-opus-5-5).",
+        if settings.llm_provider == "openai":
+            if settings.openai_api_key is None:
+                issues.append(ConfigIssue("OPENAI_API_KEY", "error", "Required for live research."))
+            if not settings.openai_model:
+                issues.append(
+                    ConfigIssue(
+                        "OPENAI_MODEL",
+                        "error",
+                        "Required for live research (for example gpt-6-luna).",
+                    )
                 )
-            )
+        else:
+            if settings.anthropic_api_key is None:
+                issues.append(
+                    ConfigIssue("ANTHROPIC_API_KEY", "error", "Required for live research.")
+                )
+            if not settings.anthropic_model:
+                issues.append(
+                    ConfigIssue(
+                        "ANTHROPIC_MODEL",
+                        "error",
+                        "Required for live research (for example claude-opus-5-5).",
+                    )
+                )
         if settings.tavily_api_key is None:
             issues.append(ConfigIssue("TAVILY_API_KEY", "error", "Required for live web search."))
     remote_db = settings.pghost.lower() not in _LOCAL_HOSTS
@@ -65,7 +79,13 @@ def configuration_issues(settings: Settings) -> list[ConfigIssue]:
 
 
 def live_ready(settings: Settings) -> bool:
-    keys = {"ANTHROPIC_API_KEY", "ANTHROPIC_MODEL", "TAVILY_API_KEY"}
+    keys = {
+        "OPENAI_API_KEY",
+        "OPENAI_MODEL",
+        "ANTHROPIC_API_KEY",
+        "ANTHROPIC_MODEL",
+        "TAVILY_API_KEY",
+    }
     return not any(
         i.key in keys
         for i in configuration_issues(settings.model_copy(update={"demo_mode": False}))

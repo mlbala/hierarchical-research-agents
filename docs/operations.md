@@ -81,8 +81,13 @@ or URL query strings. User-visible progress lives separately in `run_events`.
 
 The open-source stack is free to run, but **the services it calls are not**:
 
-* Anthropic API usage is billed per token by Anthropic.
-* Tavily search is billed per request/credit by Tavily.
+* OpenAI (default) or Anthropic API usage is billed per token. With
+  `gpt-6-luna` ($0.10 / $0.50 per million input / output tokens, checked
+  2026-10-12) a Standard run costs roughly one to three cents; reasoning tokens
+  count as output, so `OPENAI_REASONING_EFFORT=low` (or `none`) keeps it down.
+  When prepaid credit runs out the run fails with `LLM_QUOTA_EXCEEDED`.
+* Tavily search is billed per credit beyond the free 1,000 credits a month (a
+  Standard run uses at most 12 basic searches).
 * Managed PostgreSQL (e.g. Aiven) and any hosting are billed by their providers.
 
 Token usage from provider responses is stored per task and per run. An

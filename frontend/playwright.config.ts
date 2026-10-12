@@ -28,6 +28,7 @@ const serverEnv: Record<string, string> = {
   APP_ORIGIN: `http://127.0.0.1:${port}`,
   LOG_LEVEL: 'WARNING',
   // Never inherit live provider keys from the shell during tests.
+  OPENAI_API_KEY: '',
   ANTHROPIC_API_KEY: '',
   TAVILY_API_KEY: '',
 }

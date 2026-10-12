@@ -22,6 +22,8 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 BACKEND_ROOT = REPO_ROOT / "backend"
 
 Depth = Literal["quick", "standard"]
+LLMProvider = Literal["openai", "anthropic"]
+OpenAIEffort = Literal["none", "minimal", "low", "medium", "high", "xhigh", "max"]
 SslMode = Literal["disable", "allow", "prefer", "require", "verify-ca", "verify-full"]
 
 _IDENTIFIER = re.compile(r"^[a-z_][a-z0-9_]{0,62}$")
@@ -101,6 +103,15 @@ class Settings(BaseSettings):
     db_statement_timeout_ms: int = Field(default=30_000, ge=0, le=300_000)
 
     # --- Providers -----------------------------------------------------------
+    # Which LLM provider live mode uses. Both adapters share one interface and
+    # the same validation, budgets and retries; only the API client differs.
+    llm_provider: LLMProvider = "openai"
+    openai_api_key: SecretStr | None = None
+    # e.g. gpt-6-luna (OpenAI's most efficient current model).
+    openai_model: str | None = None
+    # Reasoning effort for OpenAI reasoning models. Lower is cheaper and faster;
+    # "none" disables reasoning on models that support it. Empty = model default.
+    openai_reasoning_effort: OpenAIEffort | None = "low"
     anthropic_api_key: SecretStr | None = None
     anthropic_model: str | None = None
     # Optional ``output_config.effort`` (low|medium|high|xhigh|max). Empty means
@@ -153,12 +164,19 @@ class Settings(BaseSettings):
             raise ValueError("DB_SCHEMA must be a lower-case SQL identifier")
         return value
 
-    @field_validator("anthropic_model", "pgsslrootcert", mode="before")
+    @field_validator("anthropic_model", "openai_model", "pgsslrootcert", mode="before")
     @classmethod
     def _blank_to_none(cls, value: Any) -> Any:
         return None if isinstance(value, str) and not value.strip() else value
 
-    @field_validator("anthropic_api_key", "tavily_api_key", "anthropic_effort", mode="before")
+    @field_validator(
+        "anthropic_api_key",
+        "openai_api_key",
+        "tavily_api_key",
+        "anthropic_effort",
+        "openai_reasoning_effort",
+        mode="before",
+    )
     @classmethod
     def _blank_secret_to_none(cls, value: Any) -> Any:
         return None if isinstance(value, str) and not value.strip() else value
@@ -200,6 +218,11 @@ class Settings(BaseSettings):
         return path if path.is_absolute() else (REPO_ROOT / path).resolve()
 
     @property
+    def llm_model(self) -> str | None:
+        """Model used by the configured live provider."""
+        return self.openai_model if self.llm_provider == "openai" else self.anthropic_model
+
+    @property
     def refusal_fallback_enabled(self) -> bool:
         return bool(
             self.anthropic_refusal_fallback and self.anthropic_model in REFUSAL_FALLBACK_MODELS
@@ -239,9 +262,15 @@ class Settings(BaseSettings):
             "execution_mode": self.execution_mode,
             "depth": depth,
             "limits": self.limits_for(depth).as_dict(),
-            "llm_provider": "demo" if self.demo_mode else "anthropic",
-            "llm_model": "demo-fixtures" if self.demo_mode else self.anthropic_model,
-            "llm_effort": None if self.demo_mode else self.anthropic_effort,
+            "llm_provider": "demo" if self.demo_mode else self.llm_provider,
+            "llm_model": "demo-fixtures" if self.demo_mode else self.llm_model,
+            "llm_effort": None
+            if self.demo_mode
+            else (
+                self.openai_reasoning_effort
+                if self.llm_provider == "openai"
+                else self.anthropic_effort
+            ),
             "search_provider": "demo" if self.demo_mode else "tavily",
             "llm_timeout_seconds": self.llm_timeout_seconds,
             "fetch_timeout_seconds": self.fetch_timeout_seconds,

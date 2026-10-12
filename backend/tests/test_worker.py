@@ -19,7 +19,13 @@ from app.core.config import Settings
 from app.core.errors import ProviderError
 from app.db.engine import Database
 from app.db.models import AgentTask, Report, ResearchRun, RunEvent, Source, utcnow
-from app.schemas.agents import DraftReview, EvidenceReview, FollowUp, ResearchPlan
+from app.schemas.agents import (
+    DraftReview,
+    EvidenceReview,
+    FollowUp,
+    ResearcherOutput,
+    ResearchPlan,
+)
 from app.services.events import EventBroker
 from app.services.runs import RunService
 from app.services.worker import Providers, ResearchWorker
@@ -214,6 +220,25 @@ async def test_invalid_credentials_fail_fast_without_retry(
     assert finished.status == "failed" and finished.error_code == "LLM_AUTH_FAILED"
     assert llm.plan_calls == 1
     assert finished.error_message == "denied"
+
+
+class QuotaDuringResearchLLM(DemoLLM):
+    """Runs out of prepaid credit while a researcher is extracting evidence."""
+
+    async def generate[T: BaseModel](self, request: LLMRequest, schema: type[T]) -> LLMResult[T]:
+        if schema is ResearcherOutput:
+            raise ProviderError("no credit", provider="openai", code="LLM_QUOTA_EXCEEDED")
+        return await super().generate(request, schema)
+
+
+async def test_running_out_of_credit_stops_the_run(
+    db: Database, run_service: RunService, project: Any
+) -> None:
+    run = await queue_run(run_service, project.id, depth="quick")
+    finished = await execute(db, run.id, providers_with(llm=QuotaDuringResearchLLM()))
+    assert finished.status == "failed" and finished.error_code == "LLM_QUOTA_EXCEEDED"
+    keys = {t.task_key for t in await tasks_of(db, run.id)}
+    assert "research_team_lead.review" not in keys  # no further paid calls were attempted
 
 
 class EmptySearch(DemoSearch):

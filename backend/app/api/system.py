@@ -70,8 +70,8 @@ async def config(services: Services) -> ConfigOut:
         version=__version__,
         execution_mode=s.execution_mode,
         live_ready=live_ready(s),
-        llm_provider="demo" if s.demo_mode else "anthropic",
-        llm_model="demo-fixtures" if s.demo_mode else s.anthropic_model,
+        llm_provider="demo" if s.demo_mode else s.llm_provider,
+        llm_model="demo-fixtures" if s.demo_mode else s.llm_model,
         search_provider="demo" if s.demo_mode else "tavily",
         issues=[
             ConfigIssueOut(key=i.key, severity=i.severity, message=i.message)
