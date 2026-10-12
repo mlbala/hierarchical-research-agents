@@ -218,3 +218,37 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# ---------------------------------------------------------------------------
+# Research Hive project-specific rules
+# ---------------------------------------------------------------------------
+
+# The stock Python template above ignores every `lib/` directory; the
+# frontend keeps shared helpers in src/lib, so re-include it explicitly.
+!frontend/src/lib/
+!frontend/src/lib/**
+
+# Secrets and local certificates must never be committed.
+.env.*
+!.env.example
+certs/
+*.pem
+*.key
+*.crt
+
+# Frontend build output and dependencies
+node_modules/
+frontend/dist/
+frontend/test-results/
+frontend/playwright-report/
+frontend/blob-report/
+frontend/playwright/.cache/
+
+# Tool caches
+.ruff_cache/
+.mypy_cache/
+
+# OS / editor noise
+.DS_Store
+.idea/
+.vscode/
