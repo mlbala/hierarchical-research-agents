@@ -32,7 +32,7 @@ def configuration_issues(settings: Settings) -> list[ConfigIssue]:
                     ConfigIssue(
                         "OPENAI_MODEL",
                         "error",
-                        "Required for live research (for example gpt-6-luna).",
+                        "Required for live research (for example gpt-5-nano or gpt-6-luna).",
                     )
                 )
         else:

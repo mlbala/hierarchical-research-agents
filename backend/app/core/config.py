@@ -107,7 +107,7 @@ class Settings(BaseSettings):
     # the same validation, budgets and retries; only the API client differs.
     llm_provider: LLMProvider = "openai"
     openai_api_key: SecretStr | None = None
-    # e.g. gpt-6-luna (OpenAI's most efficient current model).
+    # e.g. gpt-5-nano (cheapest; retires 2026-12-11) or gpt-6-luna.
     openai_model: str | None = None
     # Reasoning effort for OpenAI reasoning models. Lower is cheaper and faster;
     # "none" disables reasoning on models that support it. Empty = model default.

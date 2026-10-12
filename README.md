@@ -74,17 +74,24 @@ OpenAI is the default provider. Set in `.env`:
 DEMO_MODE=false
 LLM_PROVIDER=openai
 OPENAI_API_KEY=sk-...
-OPENAI_MODEL=gpt-6-luna            # OpenAI's most efficient current model
-OPENAI_REASONING_EFFORT=low        # none|low|medium|high|xhigh|max; lower = cheaper
+OPENAI_MODEL=gpt-5-nano            # cheapest OpenAI text model (retires 2026-12-11)
+OPENAI_REASONING_EFFORT=low        # gpt-5-nano: minimal|low|medium|high
 TAVILY_API_KEY=tvly-...
-LLM_INPUT_USD_PER_MTOK=0.10        # gpt-6-luna prices, for the cost estimate
-LLM_OUTPUT_USD_PER_MTOK=0.50
+LLM_INPUT_USD_PER_MTOK=0.05        # gpt-5-nano prices, for the cost estimate
+LLM_OUTPUT_USD_PER_MTOK=0.40
 ```
 
-`gpt-6-luna` is listed at $0.10 input / $0.50 output per million tokens on
-OpenAI's pricing page (checked 2026-10-12); a Standard run uses roughly 65k
-input and 15–40k output tokens, i.e. about one to three cents. For better
-writing at higher cost use `gpt-6.1-sol` (and update the two prices).
+A Standard run uses roughly 65k input and 15–40k output tokens. Prices from
+OpenAI's pricing page (checked 2026-10-12), per million input / output tokens:
+
+| Model | Price | ≈ cost per Standard run | Notes |
+| --- | --- | --- | --- |
+| `gpt-5-nano` | $0.05 / $0.40 | ~$0.01–0.02 | cheapest; OpenAI retires it on 2026-12-11 |
+| `gpt-6-luna` | $0.10 / $0.50 | ~$0.01–0.03 | current efficient model; use after December |
+| `gpt-5-mini` | $0.25 / $2.00 | ~$0.05–0.10 | not cheaper |
+| `gpt-6.1-sol` | $2 / $10 | ~$0.30–0.55 | best writing, highest cost |
+
+When you change the model, update the two price settings too.
 
 Anthropic remains supported: set `LLM_PROVIDER=anthropic`,
 `ANTHROPIC_API_KEY` and `ANTHROPIC_MODEL` (e.g. `claude-haiku-5-5` for low cost
@@ -129,7 +136,7 @@ The essentials:
 | `DB_SCHEMA` | `research_hive` | all tables live in this schema |
 | `DB_POOL_SIZE`, `DB_MAX_OVERFLOW` | `3`, `2` | small pool for a small managed database |
 | `LLM_PROVIDER` | `openai` | `openai` or `anthropic` |
-| `OPENAI_API_KEY`, `OPENAI_MODEL`, `OPENAI_REASONING_EFFORT` | —, `gpt-6-luna` in template, `low` | OpenAI live provider |
+| `OPENAI_API_KEY`, `OPENAI_MODEL`, `OPENAI_REASONING_EFFORT` | —, `gpt-5-nano` in template, `low` | OpenAI live provider |
 | `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` | — | Anthropic live provider |
 | `TAVILY_API_KEY` | — | live web search |
 | `MAX_*`, `RUN_TIMEOUT_SECONDS` | see [operations](docs/operations.md) | per-run budgets and limits |
