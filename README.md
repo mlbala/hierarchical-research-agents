@@ -74,11 +74,11 @@ OpenAI is the default provider. Set in `.env`:
 DEMO_MODE=false
 LLM_PROVIDER=openai
 OPENAI_API_KEY=sk-...
-OPENAI_MODEL=gpt-5-nano            # cheapest OpenAI text model (retires 2026-12-11)
-OPENAI_REASONING_EFFORT=low        # gpt-5-nano: minimal|low|medium|high
+OPENAI_MODEL=gpt-6-luna            # cheapest current-generation OpenAI model
+OPENAI_REASONING_EFFORT=low        # none|low|medium|high|xhigh|max; lower = cheaper
 TAVILY_API_KEY=tvly-...
-LLM_INPUT_USD_PER_MTOK=0.05        # gpt-5-nano prices, for the cost estimate
-LLM_OUTPUT_USD_PER_MTOK=0.40
+LLM_INPUT_USD_PER_MTOK=0.10        # gpt-6-luna prices, for the cost estimate
+LLM_OUTPUT_USD_PER_MTOK=0.50
 ```
 
 A Standard run uses roughly 65k input and 15–40k output tokens. Prices from
@@ -86,8 +86,9 @@ OpenAI's pricing page (checked 2026-10-12), per million input / output tokens:
 
 | Model | Price | ≈ cost per Standard run | Notes |
 | --- | --- | --- | --- |
-| `gpt-5-nano` | $0.05 / $0.40 | ~$0.01–0.02 | cheapest; OpenAI retires it on 2026-12-11 |
-| `gpt-6-luna` | $0.10 / $0.50 | ~$0.01–0.03 | current efficient model; use after December |
+| `gpt-6-luna` (default) | $0.10 / $0.50 | ~$0.01–0.03 | latest generation, built for high-volume focused tasks |
+| `gpt-5-nano` | $0.05 / $0.40 | ~$0.01–0.02 | slightly cheaper, older; OpenAI retires it on 2026-12-11 |
+| `gpt-5.6-luna` | $0.20 / $1.20 | ~$0.02–0.06 | older and pricier than `gpt-6-luna` |
 | `gpt-5-mini` | $0.25 / $2.00 | ~$0.05–0.10 | not cheaper |
 | `gpt-6.1-sol` | $2 / $10 | ~$0.30–0.55 | best writing, highest cost |
 
@@ -136,7 +137,7 @@ The essentials:
 | `DB_SCHEMA` | `research_hive` | all tables live in this schema |
 | `DB_POOL_SIZE`, `DB_MAX_OVERFLOW` | `3`, `2` | small pool for a small managed database |
 | `LLM_PROVIDER` | `openai` | `openai` or `anthropic` |
-| `OPENAI_API_KEY`, `OPENAI_MODEL`, `OPENAI_REASONING_EFFORT` | —, `gpt-5-nano` in template, `low` | OpenAI live provider |
+| `OPENAI_API_KEY`, `OPENAI_MODEL`, `OPENAI_REASONING_EFFORT` | —, `gpt-6-luna` in template, `low` | OpenAI live provider |
 | `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` | — | Anthropic live provider |
 | `TAVILY_API_KEY` | — | live web search |
 | `MAX_*`, `RUN_TIMEOUT_SECONDS` | see [operations](docs/operations.md) | per-run budgets and limits |

@@ -82,10 +82,11 @@ or URL query strings. User-visible progress lives separately in `run_events`.
 The open-source stack is free to run, but **the services it calls are not**:
 
 * OpenAI (default) or Anthropic API usage is billed per token. With
-  `gpt-5-nano` ($0.05 / $0.40 per million input / output tokens, checked
-  2026-10-12; retired by OpenAI on 2026-12-11, then use `gpt-6-luna` at
-  $0.10 / $0.50) a Standard run costs roughly one to two cents. Reasoning
-  tokens count as output, so a low reasoning effort keeps costs down.
+  `gpt-6-luna` ($0.10 / $0.50 per million input / output tokens, checked
+  2026-10-12) a Standard run costs roughly one to three cents. Prompts are
+  bounded well below the 272K-token long-context threshold, so short-context
+  prices apply. Reasoning tokens count as output, so a low reasoning effort
+  keeps costs down.
   When prepaid credit runs out the run fails with `LLM_QUOTA_EXCEEDED`.
 * Tavily search is billed per credit beyond the free 1,000 credits a month (a
   Standard run uses at most 12 basic searches).
