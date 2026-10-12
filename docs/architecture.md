@@ -49,6 +49,38 @@ Why this shape:
 * **Short transactions.** Every database write opens and commits its own
   short transaction. No transaction is held across an LLM or network call.
 
+## Backend design and request lifecycle
+
+The backend separates HTTP handling, application services, orchestration and
+persistence so that graph nodes do not need to manage web requests or database
+connections themselves:
+
+* `api/` validates HTTP inputs and returns API responses. Routers use the
+  process-wide services initialized by `main.py` during application startup.
+* `services/runs.py` persists projects and runs, enforces run creation limits
+  and idempotency, and records cancellation requests. Evidence, reports and
+  progress events have their own services.
+* `services/worker.py` owns execution: it acquires the advisory lock, claims
+  queued work, creates a per-run context, invokes the graph and persists the
+  terminal status. It starts and stops with FastAPI's lifespan.
+* `agents/graph.py` defines ordering and allowed branches; `agents/nodes.py`
+  implements each planning, research, review and writing step.
+* `agents/context.py` supplies side effects through `RunContext`: model calls,
+  permitted tools, task tracking, events, shared budgets and cancellation.
+* `db/` owns ORM models and transactional sessions; `migrations/` owns schema
+  changes. Pydantic schemas define the API and structured agent contracts.
+
+A typical request is `POST /api/v1/projects/{project_id}/runs`. The API saves
+the input as a queued run and returns its identifier; the HTTP request does
+not wait for report generation. The worker executes it asynchronously, while
+the frontend reads run details and subscribes to its SSE stream. Completed
+reports are available through `GET /api/v1/runs/{run_id}/report`, with Markdown
+download at `/api/v1/runs/{run_id}/report.md`.
+
+PostgreSQL persists execution records and artifacts, but this graph is compiled
+without a LangGraph checkpointer. An interrupted run is not resumed from its
+last graph node: it is marked interrupted, and a re-run creates a new execution.
+
 ## Agent hierarchy
 
 ```
@@ -78,6 +110,29 @@ The roles, parents and tool permissions are constants in
 limits or system instructions, or choose arbitrary next nodes.
 
 ## Workflow
+
+### How collaboration works
+
+Agents collaborate through typed graph state and run-scoped database evidence.
+Each role is an LLM call with its own instructions and a validated output
+contract, rather than a separate server or an unrestricted chat participant.
+The same configured provider/model serves the roles within a run.
+
+The director's `ResearchPlan` becomes the lead's `AssignmentSet`. Each
+researcher returns a `ResearcherOutput`; code stores its sources and verified
+findings, and appends researcher outcomes to the shared state. LangGraph joins
+the parallel research branches before invoking the lead's `EvidenceReview`.
+The writing team receives approved finding IDs and a code-built citation source
+list, then exchanges `ReportOutline`, `ReportDraft`, `DraftReview` and
+`ExecutiveSummary` outputs. The director receives the validated report for its
+`DirectorHandoff`.
+
+The database records task parent IDs for the hierarchy shown in the UI, while
+graph edges determine execution order. A role can run more than once during
+review/retry steps. Tool permissions limit browsing to the two researchers;
+leads and writers consume collected evidence. Shared budget reservations are
+locked so parallel researchers cannot independently spend the same allowance.
+Research and writing feedback triggers only the bounded routes below.
 
 ```mermaid
 flowchart TD

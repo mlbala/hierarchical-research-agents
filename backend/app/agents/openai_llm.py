@@ -27,8 +27,8 @@ from app.agents.llm import LLMRequest, LLMResult, LLMUsage, parse_structured_out
 from app.core.config import Settings
 from app.core.errors import ConfigurationError, ProviderError
 
-# Keywords OpenAI strict mode does not accept on strings; they are moved into
-# the field description (the model still sees them) and enforced by Pydantic.
+# String length keywords are expressed as supported regex constraints as well
+# as descriptions; descriptions alone cannot prevent overlong model output.
 _DESCRIBED_KEYWORDS = ("minLength", "maxLength")
 _DROPPED_KEYWORDS = ("default", "title")
 
@@ -68,6 +68,11 @@ def strict_json_schema(model: type[BaseModel]) -> dict[str, Any]:
         if limits:
             note = "{" + ", ".join(limits) + "}"
             out["description"] = f"{out['description']}\n\n{note}" if "description" in out else note
+            if out.get("type") == "string" and "pattern" not in out:
+                minimum = node.get("minLength", 0)
+                maximum = node.get("maxLength", "")
+                # Match newlines too, including Markdown and quoted excerpts.
+                out["pattern"] = rf"^[\s\S]{{{minimum},{maximum}}}$"
         if out.get("type") == "object" or "properties" in out:
             out["additionalProperties"] = False
             out["required"] = list(out.get("properties", {}))

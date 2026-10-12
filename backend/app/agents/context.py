@@ -381,9 +381,6 @@ class RunContext:
                     on_retry=on_retry,
                 )
             except LLMOutputError as exc:
-                if repaired:
-                    raise
-                repaired = True
                 log.warning(
                     "llm.invalid_output",
                     run_id=str(self.run_id),
@@ -391,7 +388,18 @@ class RunContext:
                     agent_role=task.role.value,
                     error_code=exc.code,
                     problems=exc.problems,
+                    corrective_retry_exhausted=repaired,
                 )
+                if repaired:
+                    await self.emit(
+                        "warning",
+                        "Model output still failed validation after the corrective retry.",
+                        level="warning",
+                        task_id=task.id,
+                        payload={"error_code": exc.code, "problems": exc.problems},
+                    )
+                    raise
+                repaired = True
                 await self.emit(
                     "retry",
                     "Model output failed validation; requesting one corrected response.",
@@ -406,7 +414,8 @@ class RunContext:
                     prompt=(
                         f"{prompt}\n\nYour previous response was rejected by validation "
                         f"({'; '.join(exc.problems)}). Return only JSON that matches the "
-                        "schema, respecting every length and item limit."
+                        "schema, respecting every length and item limit. Rewrite overlong "
+                        "notes concisely; do not remove evidence or change source handles."
                     ),
                     max_tokens=request.max_tokens,
                 )

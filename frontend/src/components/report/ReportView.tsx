@@ -40,6 +40,11 @@ export function ReportView({ report, run }: { report: Report; run: RunDetail }) 
     onError: (error) => toast.error(errorMessage(error)),
   })
 
+  const pdf = useMutation({
+    mutationFn: () => api.downloadReportPdf(report.run_id),
+    onError: (error) => toast.error(errorMessage(error)),
+  })
+
   return (
     <article className="space-y-6" aria-labelledby="report-title">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -51,14 +56,17 @@ export function ReportView({ report, run }: { report: Report; run: RunDetail }) 
             Saved {formatDateTime(report.created_at)} · {report.citations.length} cited sources
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button variant="outline" size="sm" onClick={() => copy.mutate()} disabled={copy.isPending}>
             {copied ? <Check aria-hidden /> : <Copy aria-hidden />} Copy Markdown
           </Button>
-          <Button asChild size="sm">
+          <Button asChild variant="outline" size="sm">
             <a href={api.reportMarkdownUrl(report.run_id)} download>
               <Download aria-hidden /> Download .md
             </a>
+          </Button>
+          <Button size="sm" onClick={() => pdf.mutate()} disabled={pdf.isPending}>
+            <Download aria-hidden /> {pdf.isPending ? 'Preparing PDF…' : 'Download PDF'}
           </Button>
         </div>
       </div>

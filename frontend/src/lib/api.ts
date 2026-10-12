@@ -162,6 +162,19 @@ export const api = {
     request<RunEvent[]>(`/runs/${runId}/events${query({ after, limit: 500 })}`),
   getReport: (runId: string) => request<Report>(`/runs/${runId}/report`),
   reportMarkdownUrl: (runId: string) => `${API_BASE}/runs/${runId}/report.md`,
+  async downloadReportPdf(runId: string): Promise<void> {
+    const response = await fetch(`${API_BASE}/runs/${runId}/report.pdf`)
+    if (!response.ok) throw await parseError(response)
+    const url = URL.createObjectURL(await response.blob())
+    const link = document.createElement('a')
+    link.href = url
+    link.download = response.headers.get('Content-Disposition')?.match(/filename="([^"]+)"/)?.[1]
+      ?? 'research-report.pdf'
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+  },
   async getReportMarkdown(runId: string): Promise<string> {
     const response = await fetch(`${API_BASE}/runs/${runId}/report.md`)
     if (!response.ok) throw await parseError(response)

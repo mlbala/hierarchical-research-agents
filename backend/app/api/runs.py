@@ -12,6 +12,7 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Header, Query, Request, Response, status
 from fastapi.responses import StreamingResponse
+from starlette.concurrency import run_in_threadpool
 
 from app.api.deps import IdempotencyKey, Paging, Services
 from app.core.errors import RateLimitedError
@@ -30,6 +31,7 @@ from app.schemas.api import (
     TaskOut,
 )
 from app.services.events import list_events
+from app.services.pdf import render_report_pdf
 
 router = APIRouter(prefix="/runs", tags=["runs"])
 
@@ -295,4 +297,16 @@ async def download_report(run_id: uuid.UUID, services: Services) -> Response:
         content=markdown,
         media_type="text/markdown; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="{slug}.md"'},
+    )
+
+
+@router.get("/{run_id}/report.pdf")
+async def download_report_pdf(run_id: uuid.UUID, services: Services) -> Response:
+    title, markdown = await services.reports.markdown_for_run(run_id)
+    content = await run_in_threadpool(render_report_pdf, title, markdown)
+    slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")[:60] or "research-report"
+    return Response(
+        content=content,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{slug}.pdf"'},
     )

@@ -81,6 +81,13 @@ uv run python ../scripts/bootstrap_db.py           # creates the schema if permi
 
 Expected output includes `Connected: PostgreSQL <version>; encrypted=True`.
 
+Connection success and application readiness are separate checks. The database
+named by `PGDATABASE` can already exist while the schema named by `DB_SCHEMA`
+and its tables are missing. `--check` only reports this condition; run the
+bootstrap command without `--check` to initialize the schema and migrations.
+Use the exact database name, including any underscores or hyphens. This project
+uses the `PG*` variables above, not `DB_HOST`/`DB_NAME` or `DATABASE_URL`.
+
 ## 6. Least-privilege credentials (recommended)
 
 Instead of running the app as `avnadmin`, create a migration role (owns the
@@ -100,7 +107,7 @@ credentials in `.env`.
 | worker always in `standby` (readiness) | another Research Hive process holds the lock, or you are connected through a pooler |
 | errors mentioning startup options | you are behind a pooler; set `DB_STATEMENT_TIMEOUT_MS=0` or use the service port |
 
-Not verified by the author of this project: a live connection to an Aiven
-service (no Aiven credentials were available during development). The TLS
-parameters are standard libpq options; everything else was verified against
-PostgreSQL 16 locally.
+A read-only connection check on 2026-10-12 successfully reached Aiven
+PostgreSQL 18.6 with `verify-full` and encrypted transport. Schema initialization
+was subsequently confirmed working by the project owner. Connection details
+and certificates are environment-specific and remain outside this guide.

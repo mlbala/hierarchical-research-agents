@@ -22,6 +22,13 @@ numbered source. Runs, evidence and reports are saved in PostgreSQL.
 * **Demo mode**: runs completely offline on clearly fictional fixtures, with no
   API keys and no external calls.
 
+Saved reports also offer **Download PDF**: a paginated A4 document with the
+summary, findings, analysis, limitations and clickable source references.
+PDF export uses ReportLab and the saved report content, retains demo/partial
+notices, and makes no additional model or web calls. Markdown download and
+copy remain available. After updating the project, run `uv sync` in `backend/`
+and rebuild the frontend with `npm run build` to enable the new option.
+
 > **Costs.** The application is open source, but the services it uses are
 > not free: OpenAI (or Anthropic) API calls are billed per token, Tavily
 > searches are billed per request beyond the free monthly credits, and managed
@@ -40,6 +47,46 @@ numbered source. Runs, evidence and reports are saved in PostgreSQL.
   schema in
 * Live mode only: an [OpenAI API key](https://platform.openai.com/api-keys)
   (or an Anthropic key) and a [Tavily API key](https://app.tavily.com/)
+
+## Technology stack
+
+* **Frontend:** React 19 and TypeScript, built with Vite. React Router handles
+  pages; TanStack Query loads and refreshes server data. Tailwind CSS 4 and
+  shadcn/ui components built on Radix provide the interface. React Markdown
+  renders the validated reports, and SSE delivers live run progress.
+* **Backend:** Python 3.12+, FastAPI and Uvicorn provide the async API and
+  serve the compiled frontend. Pydantic validates configuration, requests
+  and agent outputs; structlog produces redacted JSON logs.
+* **Agent orchestration:** LangGraph runs an explicit seven-role workflow.
+  OpenAI or Anthropic generates structured outputs, Tavily searches the web,
+  and HTTPX with BeautifulSoup/lxml retrieves and extracts source text.
+* **Persistence:** PostgreSQL stores projects, runs, tasks, evidence, reports
+  and events. SQLAlchemy uses Psycopg 3 for connections; Alembic manages
+  schema migrations. The database also supplies the durable queue and worker
+  lock, so Redis and Celery are not needed.
+* **Development checks:** uv manages Python dependencies; npm manages the
+  frontend. Ruff, mypy and pytest check the backend; TypeScript, oxlint,
+  Vitest and Playwright check the frontend.
+
+## From question to report
+
+1. Create a project, enter a question and optional context/reference URLs,
+   and choose Quick or Standard depth.
+2. The API saves a queued run in PostgreSQL. The background worker claims
+   it and starts the LangGraph workflow.
+3. The director plans the research. The research lead assigns complementary
+   tasks to the data and market researchers, which work in parallel.
+4. Researchers collect sources and verified excerpts. Their lead reviews
+   the findings and can request a bounded extra research pass.
+5. The writing lead outlines the report from approved evidence. The technical
+   writer drafts it, the lead reviews it, and the summary writer summarizes
+   the resulting report.
+6. Code validates and renumbers citations; the director adds a handoff note.
+   The backend saves the report and its source links. The UI receives progress
+   events throughout and lets you inspect evidence or download Markdown.
+
+See [Architecture](docs/architecture.md) for the exact graph, backend layers
+and how the agents exchange structured results.
 
 ## Quick start (demo mode)
 
@@ -65,6 +112,34 @@ uv run python -m app            # open http://127.0.0.1:8000
 
 Create a project, ask a question (the demo fixtures are about e-bike subsidy
 programmes) and watch the agents work. Demo reports are labelled as fictional.
+
+Demo mode still requires PostgreSQL: it replaces LLM/search/page-fetch calls
+with fixtures, while persistence and the worker run normally.
+
+### Database setup and connection checks
+
+Set `PGDATABASE` to the exact name of an existing database, and `DB_SCHEMA`
+to the namespace for this application's tables (default `research_hive`).
+The database and schema are different objects: successfully connecting or
+running `SELECT VERSION()` does not create the application tables.
+
+```bash
+# From the repository root, after uv sync in backend/
+backend/.venv/bin/python scripts/bootstrap_db.py --check  # read-only status
+backend/.venv/bin/python scripts/bootstrap_db.py          # create schema + migrate
+```
+
+`--check` exits with status 1 when migrations are missing or behind; it does
+not initialize them. If it reports `Connected` followed by `Schema ... missing`,
+connectivity works: run the command without `--check`. The bootstrap script
+creates the configured schema and applies migrations, but never creates the
+database or database roles. Its user must have permission to create the schema.
+
+This project reads `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD`,
+`PGSSLMODE` and `PGSSLROOTCERT`. Older applications' `DB_HOST`, `DB_NAME`,
+`DB_USER`, `DB_PASSWORD` and `DATABASE_URL` settings are not supported aliases.
+Relative CA paths are resolved from the repository root. Restart the backend
+after changing `.env`. See [Aiven setup](docs/aiven.md) for remote TLS setup.
 
 ## Live mode
 
@@ -106,6 +181,84 @@ Without both price settings the estimated cost is shown as "unknown".
 
 ## Development
 
+### Installing with pip
+
+Python 3.12+ users can install the locked backend dependencies without uv:
+
+```bash
+cd backend
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r ../requirements.txt
+# For lint, type checks and tests, install requirements-dev.txt instead:
+# python -m pip install -r ../requirements-dev.txt
+python ../scripts/bootstrap_db.py
+python -m app
+```
+
+Both files live at the repository root and include pinned transitive dependencies without hashes;
+`requirements-dev.txt` includes runtime dependencies plus development tools.
+`pyproject.toml` and `uv.lock` remain the source of truth. Regenerate the files
+after dependency changes, from `backend/`:
+
+```bash
+uv export --frozen --no-dev --no-emit-project --no-hashes --output-file ../requirements.txt
+uv export --frozen --no-emit-project --no-hashes --output-file ../requirements-dev.txt
+```
+
+Frontend dependencies still use `npm ci` in `frontend/`.
+
+### Running with Docker
+
+The root `Dockerfile` builds the React frontend in a Node stage, then packages
+its build with the Python backend in a non-root runtime image. Docker Compose
+uses your existing remote PostgreSQL database; it does not create a database
+service. Follow [Docker's multi-stage build guide](https://docs.docker.com/build/building/multi-stage/)
+for background on this layout.
+
+Configure `.env` with the PG* connection values and provider keys, and save
+the CA as `certs/aiven-ca.pem`. Use `PGSSLROOTCERT=./certs/aiven-ca.pem` so the
+read-only certificate mount resolves inside the container. Absolute paths from
+your host machine do not work inside the container. Ensure the certificate is
+readable by the container's user (UID 10001); the CA certificate is public.
+The database host must be reachable from Docker; `localhost` refers to the
+container itself. For PostgreSQL on a Docker Desktop host, use
+`host.docker.internal` with TLS settings appropriate for that database.
+
+From the repository root:
+
+```bash
+docker compose build
+docker compose run --rm app python ../scripts/bootstrap_db.py
+docker compose up -d
+# Open http://127.0.0.1:8000
+docker compose logs -f app
+```
+
+The bootstrap step creates the configured schema and applies migrations; run it
+before the first start and after migration changes. It is safe to rerun against
+an initialized database. No migrations are run automatically on server start.
+For status without changes, add `--check` to the bootstrap command.
+
+Compose injects `.env` at runtime and mounts `certs/` read-only; neither is
+baked into the image. It overrides `HOST=0.0.0.0` inside the container and
+publishes port 8000 only on the host's loopback interface. The healthcheck tests
+process liveness; `/api/v1/health/ready` additionally checks database readiness.
+Keep one app instance; the existing PostgreSQL advisory lock governs execution.
+
+```bash
+docker compose up -d --build  # rebuild after code changes
+docker compose down          # stop containers; remote database data is retained
+```
+
+To use the Dockerfile directly:
+
+```bash
+docker build -t research-hive:local .
+docker run --rm --env-file .env -v "$(pwd)/certs:/app/certs:ro" research-hive:local python ../scripts/bootstrap_db.py
+docker run --rm --init --env-file .env -e HOST=0.0.0.0 -e PORT=8000 -p 127.0.0.1:8000:8000 -v "$(pwd)/certs:/app/certs:ro" research-hive:local
+```
+
 Run the backend and the Vite dev server side by side; Vite proxies `/api`
 (including SSE) to the backend:
 
@@ -113,6 +266,17 @@ Run the backend and the Vite dev server side by side; Vite proxies `/api`
 cd backend  && uv run python -m app --reload   # http://127.0.0.1:8000
 cd frontend && npm run dev                      # http://localhost:5173
 ```
+
+Run these in separate terminals after installing dependencies and applying
+the database migrations. For a single-server setup, build the frontend and
+run only the backend as shown in Quick start. Check readiness with:
+
+```bash
+curl http://127.0.0.1:8000/api/v1/health/ready
+```
+
+Readiness checks database access, migrations, provider configuration and worker
+state without making paid provider calls.
 
 Checks and tests (details in [docs/testing.md](docs/testing.md)):
 
