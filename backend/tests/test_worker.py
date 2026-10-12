@@ -261,6 +261,7 @@ async def test_partial_evidence_produces_a_marked_partial_report(
     assert report is not None and report.is_partial
     assert any("Market Researcher found no usable sources" in x for x in report.limitations)
     assert any("search limit" in x for x in report.limitations)
+    assert any(w["code"] == "BUDGET_LIMIT" for w in finished.warnings)
     async with db.session() as session:
         retries = list(
             await session.scalars(

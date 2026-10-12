@@ -11,10 +11,14 @@ from __future__ import annotations
 import asyncio
 from typing import Literal
 
+import structlog
+
 from app.core.config import RunLimits
 from app.core.errors import BudgetExceededError
 
 Resource = Literal["llm", "search", "fetch", "sources"]
+
+log = structlog.get_logger(__name__)
 
 
 class RunBudget:
@@ -33,6 +37,9 @@ class RunBudget:
     async def reserve(self, resource: Resource) -> None:
         async with self._lock:
             if self._used[resource] >= self._limits[resource]:
+                if resource not in self.exhausted:
+                    # run_id is bound in the logging context by the worker.
+                    log.warning("budget.exceeded", resource=resource, limit=self._limits[resource])
                 self.exhausted.add(resource)
                 raise BudgetExceededError(resource, self._limits[resource])
             self._used[resource] += 1

@@ -396,6 +396,13 @@ async def _gather_sources(
             continue
         stored.append((source_id, *entry))
 
+    for resource in sorted(set(limits_hit)):
+        await ctx.warn(
+            "BUDGET_LIMIT",
+            f"The run's {resource} limit was reached; some planned research was skipped.",
+            task_id=task.id,
+        )
+
     prompt_sources: list[PromptSource] = []
     ref_map: dict[str, uuid.UUID] = {}
     for index, (source_id, url, title, kind, text) in enumerate(stored, start=1):
