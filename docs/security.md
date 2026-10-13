@@ -79,8 +79,8 @@ not user authentication.**
 * No cookies, auth headers or ambient proxy settings (raw `httpcore` pool, no
   cookie jar, environment proxies ignored).
 * Connect/read timeouts plus an overall deadline; streamed 2 MB cap enforced
-  after decompression (zip bombs are stopped); HTML and plain text only; no
-  JavaScript and no subresources.
+  after decompression (zip bombs are stopped); HTML, plain text and Markdown
+  only; no JavaScript and no subresources.
 * Fails closed whenever safety cannot be established.
 
 ## Secrets
@@ -107,5 +107,6 @@ not user authentication.**
   bias a model's wording, though it cannot change tools, limits or routing.
 * Rate limiting is in-memory and per process.
 * robots.txt is not consulted; the fetcher identifies itself with a
-  descriptive User-Agent and fetches only a few pages per run.
+  descriptive User-Agent that includes the project URL as contact info, and
+  fetches only a few pages per run.
 * Demo mode content is fictional and labelled as such.

@@ -261,6 +261,29 @@ async def test_rejects_unsupported_or_oversized_responses(
     assert excinfo.value.code == code
 
 
+@pytest.mark.parametrize("media_type", ["text/markdown", "text/x-markdown"])
+async def test_markdown_pages_are_read_as_text(media_type: str) -> None:
+    """Docs sites may negotiate Markdown; the first H1 becomes the title."""
+    body = b"---\ntitle: front matter\n---\n\n# Multi-stage builds #\n\nUse stages.\n\n# Next\n"
+    fetcher, _ = make_fetcher(
+        {PUBLIC_IP: http_response(200, {"Content-Type": f"{media_type}; charset=utf-8"}, body)},
+        {"site.example": [PUBLIC_IP]},
+    )
+    page = await fetcher.fetch("http://site.example/docs")
+    assert page.title == "Multi-stage builds"
+    assert "Use stages." in page.text
+    assert page.content_type == media_type
+
+
+async def test_markdown_without_heading_is_titled_by_host() -> None:
+    fetcher, _ = make_fetcher(
+        {PUBLIC_IP: http_response(200, {"Content-Type": "text/markdown"}, b"## Only a section\n")},
+        {"site.example": [PUBLIC_IP]},
+    )
+    page = await fetcher.fetch("http://site.example/docs")
+    assert page.title == "site.example"
+
+
 async def test_decompression_bomb_is_stopped() -> None:
     bomb = gzip.compress(b"\0" * 5_000_000)  # ~5 KB on the wire, 5 MB expanded
     fetcher, _ = make_fetcher(
@@ -319,3 +342,5 @@ async def test_no_cookies_or_credentials_are_sent() -> None:
     assert b"cookie" not in request
     assert b"authorization" not in request
     assert b"host: site.example" in request
+    # Sites such as Wikipedia return 403 to bots without a contact URL.
+    assert b"user-agent: researchhive/0.1 (+https://" in request
