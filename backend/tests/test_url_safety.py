@@ -12,6 +12,7 @@ import httpcore
 import pytest
 
 from app.core.errors import UnsafeUrlError
+from app.services.evidence import excerpt_in_source
 from app.tools.fetch import FetchError, SafePageFetcher
 from app.tools.url_safety import (
     SafeNetworkBackend,
@@ -264,20 +265,35 @@ async def test_rejects_unsupported_or_oversized_responses(
 @pytest.mark.parametrize("media_type", ["text/markdown", "text/x-markdown"])
 async def test_markdown_pages_are_read_as_text(media_type: str) -> None:
     """Docs sites may negotiate Markdown; the first H1 becomes the title."""
-    body = b"---\ntitle: front matter\n---\n\n# Multi-stage builds #\n\nUse stages.\n\n# Next\n"
+    body = (
+        b"---\ntitle: front matter\n---\n\n# Multi-stage builds #\n\n"
+        b'Requires [BuildKit](/build/buildkit/ "BuildKit") and the '
+        b"[Docker (software)](https://en.wikipedia.org/wiki/Docker_(software)) CLI.\n\n"
+        b"![Stage diagram](/img/stages.png)\n\n# Next\n"
+    )
     fetcher, _ = make_fetcher(
         {PUBLIC_IP: http_response(200, {"Content-Type": f"{media_type}; charset=utf-8"}, body)},
         {"site.example": [PUBLIC_IP]},
     )
     page = await fetcher.fetch("http://site.example/docs")
     assert page.title == "Multi-stage builds"
-    assert "Use stages." in page.text
     assert page.content_type == media_type
+    # Links and images keep their visible text only.
+    assert "Requires BuildKit and the Docker (software) CLI." in page.text
+    assert "Stage diagram" in page.text
+    assert "/build/buildkit/" not in page.text and "wikipedia.org" not in page.text
+    # A faithful quote of the rendered sentence verifies against the source.
+    assert excerpt_in_source("requires BuildKit and the Docker (software) CLI", page.text)
 
 
-async def test_markdown_without_heading_is_titled_by_host() -> None:
+@pytest.mark.parametrize(
+    "body",
+    [b"## Only a section\n", b"```dockerfile\n# syntax=docker/dockerfile:1\n```\n\n# Title\n"],
+)
+async def test_markdown_without_leading_heading_is_titled_by_host(body: bytes) -> None:
+    """Section headings and comments inside code blocks are not page titles."""
     fetcher, _ = make_fetcher(
-        {PUBLIC_IP: http_response(200, {"Content-Type": "text/markdown"}, b"## Only a section\n")},
+        {PUBLIC_IP: http_response(200, {"Content-Type": "text/markdown"}, body)},
         {"site.example": [PUBLIC_IP]},
     )
     page = await fetcher.fetch("http://site.example/docs")

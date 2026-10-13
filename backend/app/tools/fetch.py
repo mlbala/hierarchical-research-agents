@@ -31,7 +31,12 @@ import certifi
 import httpcore
 
 from app.core.errors import AppError, UnsafeUrlError
-from app.tools.extract import ExtractedDocument, extract_html, extract_plain_text
+from app.tools.extract import (
+    ExtractedDocument,
+    extract_html,
+    extract_markdown,
+    extract_plain_text,
+)
 from app.tools.url_safety import Resolver, SafeNetworkBackend, system_resolver, validate_public_url
 
 MAX_REDIRECTS = 3
@@ -47,7 +52,6 @@ _ALLOWED_TYPES = {
     "text/markdown": "markdown",
     "text/x-markdown": "markdown",
 }
-_MARKDOWN_H1 = re.compile(r"^#[ \t]+(.+?)[ \t#]*$", re.MULTILINE)
 _META_CHARSET = re.compile(rb"""<meta[^>]+charset\s*=\s*["']?([A-Za-z0-9_\-]+)""", re.IGNORECASE)
 
 
@@ -270,12 +274,10 @@ class SafePageFetcher:
             return await asyncio.to_thread(
                 extract_html, decoded, max_chars=self._max_chars, fallback_publisher=host
             )
-        title = host
         if kind == "markdown":
-            # Use the document's first H1 so citations show the page title.
-            heading = _MARKDOWN_H1.search(decoded[:8192])
-            if heading:
-                title = heading.group(1)
+            return extract_markdown(
+                decoded, max_chars=self._max_chars, fallback_title=host, fallback_publisher=host
+            )
         return extract_plain_text(
-            decoded, max_chars=self._max_chars, fallback_title=title, fallback_publisher=host
+            decoded, max_chars=self._max_chars, fallback_title=host, fallback_publisher=host
         )
