@@ -31,12 +31,27 @@ import certifi
 import httpcore
 
 from app.core.errors import AppError, UnsafeUrlError
-from app.tools.extract import ExtractedDocument, extract_html, extract_plain_text
+from app.tools.extract import (
+    ExtractedDocument,
+    extract_html,
+    extract_markdown,
+    extract_plain_text,
+)
 from app.tools.url_safety import Resolver, SafeNetworkBackend, system_resolver, validate_public_url
 
 MAX_REDIRECTS = 3
-USER_AGENT = b"ResearchHive/0.1 (self-hosted research assistant)"
-_ALLOWED_TYPES = {"text/html": "html", "application/xhtml+xml": "html", "text/plain": "text"}
+# Wikimedia and other sites reject automated clients whose User-Agent lacks a
+# contact URL (HTTP 403), so the project URL is included.
+USER_AGENT = b"ResearchHive/0.1 (+https://github.com/mlbala/hierarchical-research-agents)"
+# Some documentation sites (e.g. docs.docker.com) answer an Accept header that
+# includes text/plain with Markdown. It is readable text, so keep it.
+_ALLOWED_TYPES = {
+    "text/html": "html",
+    "application/xhtml+xml": "html",
+    "text/plain": "text",
+    "text/markdown": "markdown",
+    "text/x-markdown": "markdown",
+}
 _META_CHARSET = re.compile(rb"""<meta[^>]+charset\s*=\s*["']?([A-Za-z0-9_\-]+)""", re.IGNORECASE)
 
 
@@ -258,6 +273,10 @@ class SafePageFetcher:
             # Parsing large documents is CPU-bound; keep the event loop free.
             return await asyncio.to_thread(
                 extract_html, decoded, max_chars=self._max_chars, fallback_publisher=host
+            )
+        if kind == "markdown":
+            return extract_markdown(
+                decoded, max_chars=self._max_chars, fallback_title=host, fallback_publisher=host
             )
         return extract_plain_text(
             decoded, max_chars=self._max_chars, fallback_title=host, fallback_publisher=host

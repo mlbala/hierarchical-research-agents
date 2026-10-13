@@ -1,4 +1,4 @@
-"""Readable-text extraction from HTML and plain text.
+"""Readable-text extraction from HTML, Markdown and plain text.
 
 Pages are parsed as inert data: scripts, styles, frames and embedded objects
 are removed and never executed, and no subresources are loaded.
@@ -28,6 +28,10 @@ _DATE_META = (
 )
 _BLANK_LINES = re.compile(r"\n{3,}")
 _SPACES = re.compile(r"[ \t\r\f\v]+")
+# Markdown inline links and images, with an optional "title". Targets may hold
+# one level of parentheses, as Wikipedia URLs do.
+_MD_LINK = re.compile(r'!?\[([^\]\n]*)\]\((?:[^()\s]|\([^()\s]*\))*(?:\s+"[^"\n]*")?\)')
+_MD_H1 = re.compile(r"^#[ \t]+(.+?)[ \t#]*$", re.MULTILINE)
 
 
 @dataclass(frozen=True)
@@ -133,4 +137,23 @@ def extract_plain_text(
         published_at=None,
         text=text,
         truncated=truncated,
+    )
+
+
+def extract_markdown(
+    body: str, *, max_chars: int, fallback_title: str, fallback_publisher: str | None
+) -> ExtractedDocument:
+    """Markdown read as plain text, the way a reader sees it.
+
+    Links and images keep only their visible text, so evidence quoted from the
+    page matches the stored source. The first H1 before any code block is the
+    title (a ``# comment`` inside a fenced snippet is not a heading).
+    """
+    text = _MD_LINK.sub(r"\1", body)
+    heading = _MD_H1.search(text[:8192].split("```", 1)[0])
+    return extract_plain_text(
+        text,
+        max_chars=max_chars,
+        fallback_title=heading.group(1) if heading else fallback_title,
+        fallback_publisher=fallback_publisher,
     )

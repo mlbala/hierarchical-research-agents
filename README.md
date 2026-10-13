@@ -39,34 +39,18 @@ and rebuild the frontend with `npm run build` to enable the new option.
 > workspace. It binds to `127.0.0.1` by default; read
 > [docs/security.md](docs/security.md) before exposing it on a network.
 
-## Requirements
-
-* Python 3.12+ and [uv](https://docs.astral.sh/uv/)
-* Node.js 20.19+ (22 LTS recommended) and npm
-* PostgreSQL 14+ (Aiven or local) — the app needs one database it can create a
-  schema in
-* Live mode only: an [OpenAI API key](https://platform.openai.com/api-keys)
-  (or an Anthropic key) and a [Tavily API key](https://app.tavily.com/)
-
 ## Technology stack
 
-* **Frontend:** React 19 and TypeScript, built with Vite. React Router handles
-  pages; TanStack Query loads and refreshes server data. Tailwind CSS 4 and
-  shadcn/ui components built on Radix provide the interface. React Markdown
-  renders the validated reports, and SSE delivers live run progress.
-* **Backend:** Python 3.12+, FastAPI and Uvicorn provide the async API and
-  serve the compiled frontend. Pydantic validates configuration, requests
-  and agent outputs; structlog produces redacted JSON logs.
-* **Agent orchestration:** LangGraph runs an explicit seven-role workflow.
-  OpenAI or Anthropic generates structured outputs, Tavily searches the web,
-  and HTTPX with BeautifulSoup/lxml retrieves and extracts source text.
-* **Persistence:** PostgreSQL stores projects, runs, tasks, evidence, reports
-  and events. SQLAlchemy uses Psycopg 3 for connections; Alembic manages
-  schema migrations. The database also supplies the durable queue and worker
-  lock, so Redis and Celery are not needed.
-* **Development checks:** uv manages Python dependencies; npm manages the
-  frontend. Ruff, mypy and pytest check the backend; TypeScript, oxlint,
-  Vitest and Playwright check the frontend.
+| Layer | Technologies |
+| --- | --- |
+| **Frontend** | React 19 and TypeScript, built with Vite. React Router for pages, TanStack Query for server data, Tailwind CSS 4 with shadcn/ui (Radix) components, React Markdown for reports, Server-Sent Events (SSE) for live progress. |
+| **Backend API** | Python 3.12+, FastAPI and Uvicorn. One async server provides the API and serves the built frontend. Pydantic validates configuration, requests and agent outputs; structlog writes redacted JSON logs. |
+| **Agents** | LangGraph runs the explicit seven-role workflow. The OpenAI SDK (default model `gpt-6-luna`) or the Anthropic SDK produces structured outputs. |
+| **Web research** | Tavily for search. An SSRF-safe page fetcher (httpcore with the certifi CA bundle) reads HTML, plain-text and Markdown pages; BeautifulSoup and lxml extract readable text. |
+| **Reports** | Markdown, shown in the UI and downloadable; paginated PDF export with ReportLab. |
+| **Persistence** | PostgreSQL 14+ (e.g. Aiven) through SQLAlchemy 2.1 and Psycopg 3, with Alembic migrations. The database also provides the durable run queue and worker lock, so Redis and Celery are not needed. |
+| **Packaging and deployment** | Multi-stage Dockerfile (a Node 22 stage builds the UI; a slim Python 3.12 image runs it as a non-root user) and Docker Compose. uv manages Python dependencies, with exported pip requirements files; npm manages the frontend. |
+| **Quality checks** | Ruff, mypy and pytest for the backend; TypeScript, oxlint, Vitest and Playwright for the frontend. |
 
 ## From question to report
 
@@ -88,13 +72,106 @@ and rebuild the frontend with `npm run build` to enable the new option.
 See [Architecture](docs/architecture.md) for the exact graph, backend layers
 and how the agents exchange structured results.
 
-## Quick start (demo mode)
+## Running the app
+
+The app runs in one of two modes, chosen with `DEMO_MODE` in `.env`:
+
+* **Demo mode** (`DEMO_MODE=true`): offline, fictional fixtures, no API keys
+  and no cost. Good for trying the UI.
+* **Live mode** (`DEMO_MODE=false`): real web research with OpenAI (or
+  Anthropic) and Tavily. Each run costs a little; see [Live mode](#live-mode).
+
+Both modes need a PostgreSQL database. You can run the app **with Docker**
+(recommended: nothing else to install) or **from source**.
+
+### Requirements
+
+* **Docker route:** [Docker Desktop](https://www.docker.com/products/docker-desktop/)
+  (or Docker Engine with Compose v2). Python and Node.js are not needed.
+* **From-source route:** Python 3.12+ with [uv](https://docs.astral.sh/uv/),
+  and Node.js 20.19+ (22 LTS recommended) with npm.
+* **Both:** a PostgreSQL 14+ database (Aiven or local) in which the app may
+  create a schema.
+* **Live mode only:** an [OpenAI API key](https://platform.openai.com/api-keys)
+  (or an Anthropic key) and a [Tavily API key](https://app.tavily.com/).
+
+### 1. Configure
 
 ```bash
 git clone git@github.com:mlbala/hierarchical-research-agents.git
 cd hierarchical-research-agents
-cp .env.example .env            # DEMO_MODE=true by default; set the PG* values
+cp .env.example .env
+```
 
+Edit `.env`: set the `PG*` connection values, choose `DEMO_MODE`, and add the
+provider keys for live mode. For Aiven, save the CA certificate as
+`certs/aiven-ca.pem` and keep `PGSSLROOTCERT=./certs/aiven-ca.pem` (see
+[Aiven setup](docs/aiven.md)). `.env` and `certs/` are git-ignored.
+
+### 2a. Run with Docker (recommended)
+
+From the repository root:
+
+```bash
+docker compose build                                          # build the image
+docker compose run --rm app python ../scripts/bootstrap_db.py # create schema + migrate
+docker compose up -d                                          # start in the background
+```
+
+Open **http://127.0.0.1:8000**. Create a project, ask a question, choose
+Quick or Standard depth and watch the agents work. Demo reports are about
+fictional e-bike subsidy programmes and are labelled as such.
+
+Everyday commands:
+
+| Task | Command |
+| --- | --- |
+| Start | `docker compose up -d` |
+| Follow the logs | `docker compose logs -f app` |
+| Check status and health | `docker compose ps` |
+| Rebuild after code changes | `docker compose up -d --build` |
+| Stop | `docker compose down` (data stays in your database) |
+| Check the database without changes | `docker compose run --rm app python ../scripts/bootstrap_db.py --check` |
+
+Run the bootstrap step before the first start and after migration changes. It
+is safe to rerun against an initialized database; no migrations run
+automatically on server start. The container restarts on its own when Docker
+starts (`restart: unless-stopped`) unless you stopped it with
+`docker compose down`.
+
+How the container is set up:
+
+* The root `Dockerfile` builds the React frontend in a Node stage, then copies
+  the build into a non-root Python runtime image (UID 10001). See
+  [Docker's multi-stage build guide](https://docs.docker.com/build/building/multi-stage/)
+  for background on this layout.
+* Compose injects `.env` at runtime and mounts `certs/` read-only; neither is
+  baked into the image. Use relative paths such as
+  `PGSSLROOTCERT=./certs/aiven-ca.pem`; absolute host paths do not exist
+  inside the container. The certificate must be readable by UID 10001 (a CA
+  certificate is public).
+* Compose sets `HOST=0.0.0.0` inside the container and publishes port 8000
+  only on the host's loopback interface. The UI and API share that one
+  address, so no CORS setup is needed.
+* There is no database service in Compose; the app uses your existing
+  PostgreSQL. The database host must be reachable from Docker: `localhost`
+  means the container itself, so for PostgreSQL on the Docker Desktop host use
+  `host.docker.internal` with suitable TLS settings.
+* The healthcheck tests process liveness; `/api/v1/health/ready` also checks
+  the database, migrations, provider configuration and worker. Keep one app
+  instance; a PostgreSQL advisory lock governs execution.
+
+To use the Dockerfile without Compose:
+
+```bash
+docker build -t research-hive:local .
+docker run --rm --env-file .env -v "$(pwd)/certs:/app/certs:ro" research-hive:local python ../scripts/bootstrap_db.py
+docker run --rm --init --env-file .env -e HOST=0.0.0.0 -e PORT=8000 -p 127.0.0.1:8000:8000 -v "$(pwd)/certs:/app/certs:ro" research-hive:local
+```
+
+### 2b. Run from source
+
+```bash
 # Backend dependencies + database schema
 cd backend
 uv sync
@@ -110,13 +187,32 @@ cd ../backend
 uv run python -m app            # open http://127.0.0.1:8000
 ```
 
-Create a project, ask a question (the demo fixtures are about e-bike subsidy
-programmes) and watch the agents work. Demo reports are labelled as fictional.
+To install the backend with pip instead of uv, see [Installing with pip](#installing-with-pip).
 
-Demo mode still requires PostgreSQL: it replaces LLM/search/page-fetch calls
-with fixtures, while persistence and the worker run normally.
+### Development with hot reload
+
+Run the backend and the Vite dev server in separate terminals, after
+installing dependencies and applying the database migrations. Vite proxies
+`/api` (including SSE) to the backend:
+
+```bash
+cd backend  && uv run python -m app --reload   # http://127.0.0.1:8000
+cd frontend && npm run dev                      # http://localhost:5173
+```
+
+Check readiness with:
+
+```bash
+curl http://127.0.0.1:8000/api/v1/health/ready
+```
+
+Readiness checks database access, migrations, provider configuration and worker
+state without making paid provider calls.
 
 ### Database setup and connection checks
+
+Demo mode still requires PostgreSQL: it replaces LLM, search and page-fetch
+calls with fixtures, while persistence and the worker run normally.
 
 Set `PGDATABASE` to the exact name of an existing database, and `DB_SCHEMA`
 to the namespace for this application's tables (default `research_hive`).
@@ -179,6 +275,59 @@ creation, readiness check) when a key or the model is missing, and a run stops
 with `LLM_QUOTA_EXCEEDED` when the provider account runs out of credit.
 Without both price settings the estimated cost is shown as "unknown".
 
+## Testing
+
+### Quality checks
+
+```bash
+./scripts/check.sh      # ruff, mypy, pytest, tsc, oxlint, vitest, build, Playwright
+```
+
+Database tests and the Playwright suite need a dedicated test database,
+configured with `TEST_PG*` variables (its name must end in `_test`). Without
+one they are skipped. Details are in [docs/testing.md](docs/testing.md).
+
+### Testing the UI
+
+**By hand.** With the app running, open http://127.0.0.1:8000 and check that:
+
+1. the home page loads and recent research appears in the sidebar;
+2. a new project can be created and a question started (Quick depth);
+3. the run page shows live agent progress and finishes as Completed or Partial;
+4. the Report and Sources tabs work, and a citation marker such as `[1]`
+   opens its source;
+5. **Download .md** and **Download PDF** save files;
+6. **Search reports** finds the saved report.
+
+In live mode, step 2 makes paid API calls (a Quick run costs about $0.005 with
+`gpt-6-luna`) and saves the run to your database.
+
+**Automated.** The Playwright suite drives a real browser through the full
+flow (create a project, run research, read the cited report, download it,
+search, re-run). It starts its own backend in demo mode on port 8799, so it
+makes no paid calls and never touches your real data. A throwaway PostgreSQL
+container provides the test database:
+
+```bash
+# 1. Throwaway test database (deleted when stopped)
+docker run -d --rm --name hive-e2e-db -e POSTGRES_PASSWORD=e2e \
+  -e POSTGRES_DB=research_hive_test -p 127.0.0.1:55433:5432 postgres:16-alpine
+
+# 2. Build the UI and run the browser tests
+cd frontend
+npm ci && npx playwright install chromium   # first time only
+npm run build
+TEST_PGHOST=127.0.0.1 TEST_PGPORT=55433 TEST_PGDATABASE=research_hive_test \
+TEST_PGUSER=postgres TEST_PGPASSWORD=e2e TEST_PGSSLMODE=disable \
+npm run test:e2e                  # add  -- --headed  to watch, or  -- --ui  for the interactive runner
+
+# 3. Clean up
+docker stop hive-e2e-db
+```
+
+The suite runs the backend from source rather than from the Docker image, so
+it tests the same UI and API code, not the image itself.
+
 ## Development
 
 ### Installing with pip
@@ -207,85 +356,6 @@ uv export --frozen --no-emit-project --no-hashes --output-file ../requirements-d
 ```
 
 Frontend dependencies still use `npm ci` in `frontend/`.
-
-### Running with Docker
-
-The root `Dockerfile` builds the React frontend in a Node stage, then packages
-its build with the Python backend in a non-root runtime image. Docker Compose
-uses your existing remote PostgreSQL database; it does not create a database
-service. Follow [Docker's multi-stage build guide](https://docs.docker.com/build/building/multi-stage/)
-for background on this layout.
-
-Configure `.env` with the PG* connection values and provider keys, and save
-the CA as `certs/aiven-ca.pem`. Use `PGSSLROOTCERT=./certs/aiven-ca.pem` so the
-read-only certificate mount resolves inside the container. Absolute paths from
-your host machine do not work inside the container. Ensure the certificate is
-readable by the container's user (UID 10001); the CA certificate is public.
-The database host must be reachable from Docker; `localhost` refers to the
-container itself. For PostgreSQL on a Docker Desktop host, use
-`host.docker.internal` with TLS settings appropriate for that database.
-
-From the repository root:
-
-```bash
-docker compose build
-docker compose run --rm app python ../scripts/bootstrap_db.py
-docker compose up -d
-# Open http://127.0.0.1:8000
-docker compose logs -f app
-```
-
-The bootstrap step creates the configured schema and applies migrations; run it
-before the first start and after migration changes. It is safe to rerun against
-an initialized database. No migrations are run automatically on server start.
-For status without changes, add `--check` to the bootstrap command.
-
-Compose injects `.env` at runtime and mounts `certs/` read-only; neither is
-baked into the image. It overrides `HOST=0.0.0.0` inside the container and
-publishes port 8000 only on the host's loopback interface. The healthcheck tests
-process liveness; `/api/v1/health/ready` additionally checks database readiness.
-Keep one app instance; the existing PostgreSQL advisory lock governs execution.
-
-```bash
-docker compose up -d --build  # rebuild after code changes
-docker compose down          # stop containers; remote database data is retained
-```
-
-To use the Dockerfile directly:
-
-```bash
-docker build -t research-hive:local .
-docker run --rm --env-file .env -v "$(pwd)/certs:/app/certs:ro" research-hive:local python ../scripts/bootstrap_db.py
-docker run --rm --init --env-file .env -e HOST=0.0.0.0 -e PORT=8000 -p 127.0.0.1:8000:8000 -v "$(pwd)/certs:/app/certs:ro" research-hive:local
-```
-
-Run the backend and the Vite dev server side by side; Vite proxies `/api`
-(including SSE) to the backend:
-
-```bash
-cd backend  && uv run python -m app --reload   # http://127.0.0.1:8000
-cd frontend && npm run dev                      # http://localhost:5173
-```
-
-Run these in separate terminals after installing dependencies and applying
-the database migrations. For a single-server setup, build the frontend and
-run only the backend as shown in Quick start. Check readiness with:
-
-```bash
-curl http://127.0.0.1:8000/api/v1/health/ready
-```
-
-Readiness checks database access, migrations, provider configuration and worker
-state without making paid provider calls.
-
-Checks and tests (details in [docs/testing.md](docs/testing.md)):
-
-```bash
-./scripts/check.sh      # ruff, mypy, pytest, tsc, oxlint, vitest, build, Playwright
-```
-
-Database tests and the Playwright suite need a dedicated test database
-configured via `TEST_PG*` variables (name must end in `_test`).
 
 ## Configuration
 
